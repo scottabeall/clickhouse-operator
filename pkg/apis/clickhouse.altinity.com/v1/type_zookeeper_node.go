@@ -18,6 +18,23 @@ import (
 	"github.com/altinity/clickhouse-operator/pkg/apis/common/types"
 )
 
+// NewZookeeperNode creates a ZookeeperNode with the given host, port, and optional secure flag.
+func NewZookeeperNode(host string, port int32, secure ...bool) ZookeeperNode {
+	node := ZookeeperNode{
+		Host: host,
+		Port: types.NewInt32(port),
+	}
+	if len(secure) > 0 && secure[0] {
+		node.Secure = types.NewStringBool(true)
+	}
+	return node
+}
+
+// NewZookeeperNodeFromPortInfo creates a ZookeeperNode from a host and ZKPortInfo.
+func NewZookeeperNodeFromPortInfo(host string, portInfo ZKPortInfo) ZookeeperNode {
+	return NewZookeeperNode(host, portInfo.Port, portInfo.Secure)
+}
+
 // ZookeeperNode defines item of nodes section of .spec.configuration.zookeeper
 type ZookeeperNode struct {
 	Host             string            `json:"host,omitempty"             yaml:"host,omitempty"`
