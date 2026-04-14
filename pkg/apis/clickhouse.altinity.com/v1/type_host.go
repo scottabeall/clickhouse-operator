@@ -552,11 +552,52 @@ const (
 	ChDefaultInterserverHTTPPortNumber = int32(9009)
 
 	// Keeper open ports names and values
-	KpDefaultZKPortName     = "zk"
-	KpDefaultZKPortNumber   = int32(2181)
-	KpDefaultRaftPortName   = "raft"
-	KpDefaultRaftPortNumber = int32(9444)
+	KpDefaultZKPortName         = "zk"
+	KpDefaultZKPortNumber       = int32(2181)
+	KpDefaultZKSecurePortName   = "zk-secure"
+	KpDefaultZKSecurePortNumber = int32(2281)
+	KpDefaultRaftPortName       = "raft"
+	KpDefaultRaftPortNumber     = int32(9444)
 )
+
+// ZKPortInfo holds the extracted ZooKeeper port and whether it's a secure (TLS) port.
+type ZKPortInfo struct {
+	Port   int32
+	Secure bool
+}
+
+// ExtractZKPort extracts the ZooKeeper client port from a Kubernetes service port list.
+// Matches by port name (KpDefaultZKPortName) or port number (KpDefaultZKPortNumber).
+// Returns KpDefaultZKPortNumber if no matching port is found.
+func ExtractZKPort(ports []core.ServicePort) int32 {
+	return ExtractZKPortInfo(ports).Port
+}
+
+// ExtractZKPortInfo extracts the ZooKeeper client port and TLS flag from a service port list.
+// Prefers the secure port if available; falls back to insecure port.
+func ExtractZKPortInfo(ports []core.ServicePort) ZKPortInfo {
+	// Prefer secure port if available
+	for _, p := range ports {
+		if p.Name == KpDefaultZKSecurePortName || p.Port == KpDefaultZKSecurePortNumber {
+			return ZKPortInfo{
+				Port:   p.Port,
+				Secure: true,
+			}
+		}
+	}
+	for _, p := range ports {
+		if p.Name == KpDefaultZKPortName || p.Port == KpDefaultZKPortNumber {
+			return ZKPortInfo{
+				Port:   p.Port,
+				Secure: false,
+			}
+		}
+	}
+	return ZKPortInfo{
+		Port:   KpDefaultZKPortNumber,
+		Secure: false,
+	}
+}
 
 func (host *Host) WalkPorts(f func(name string, port *types.Int32, protocol core.Protocol) bool) {
 	if host == nil {
