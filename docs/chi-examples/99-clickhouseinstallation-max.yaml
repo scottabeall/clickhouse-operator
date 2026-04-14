@@ -253,6 +253,14 @@ spec:
 
   configuration:
     zookeeper:
+      # Option 1: Reference a ClickHouseKeeperInstallation (CHK) by name.
+      # The operator resolves this to ZooKeeper node addresses automatically.
+      # keeper:
+      #   name: my-keeper
+      #   namespace: my-namespace    # optional, defaults to CHI namespace
+      #   serviceType: replicas      # "replicas" (default) or "service"
+
+      # Option 2: Specify ZooKeeper nodes explicitly.
       nodes:
         - host: zookeeper-0.zookeepers.zoo3ns.svc.cluster.local
           port: 2181
