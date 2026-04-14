@@ -5691,6 +5691,52 @@ def test_010062(self):
         delete_test_namespace()
 
 
+@TestScenario
+@Name("test_010063. Test CHI keeper reference to CHK")
+@Requirements(RQ_SRS_026_ClickHouseOperator_Create("1.0"))
+def test_010063(self):
+    """Verify that CHI can reference a CHK by name and the operator resolves keeper endpoints."""
+    create_shell_namespace_clickhouse_template()
+
+    chk_manifest = "manifests/chk/test-063-keeper-ref-chk.yaml"
+    chi_manifest = "manifests/chi/test-063-keeper-ref.yaml"
+    chk = "test-063-chk"
+    chi = "test-063-keeper-ref"
+
+    with Given("CHK is installed"):
+        kubectl.create_and_check(
+            manifest=chk_manifest,
+            kind="chk",
+            check={
+                "do_not_delete": 1,
+            },
+        )
+
+    with And("CHI referencing CHK by name is installed"):
+        kubectl.create_and_check(
+            manifest=chi_manifest,
+            check={
+                "apply_templates": {current().context.clickhouse_template},
+                "object_counts": {"statefulset": 2, "pod": 2, "service": 3},
+                "do_not_delete": 1,
+            },
+        )
+
+    with Then("ClickHouse can access ZooKeeper via resolved keeper reference"):
+        out = clickhouse.query(chi, "SELECT count() FROM system.zookeeper WHERE path = '/'")
+        assert int(out.strip()) > 0, error("ClickHouse should be able to query ZooKeeper")
+
+    with And("ZooKeeper is accessible from all replicas"):
+        for pod_name in kubectl.get_pod_names(chi):
+            out = clickhouse.query(chi, "SELECT count() FROM system.zookeeper WHERE path = '/'", pod=pod_name)
+            assert int(out.strip()) > 0, error(f"ZooKeeper should be accessible from {pod_name}")
+
+    kubectl.delete_chi(chi)
+
+    with Finally("I clean up"):
+        delete_test_namespace()
+
+
 #
 # Keeper tests section
 #
