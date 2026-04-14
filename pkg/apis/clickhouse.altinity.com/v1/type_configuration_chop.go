@@ -41,6 +41,15 @@ const (
 	defaultStatefulSetUpdateTimeout      = 300
 	defaultStatefulSetUpdatePollInterval = 5
 
+	// defaultKeeperReadyTimeout specifies default timeout (seconds) to wait for
+	// a referenced ClickHouseKeeper to become ready during CHI reconcile.
+	defaultKeeperReadyTimeout = 120
+
+	// KeeperOnResourceUpdateNone means do nothing when referenced CHK changes (default).
+	KeeperOnResourceUpdateNone = "none"
+	// KeeperOnResourceUpdateReconcile means trigger CHI reconcile when referenced CHK changes.
+	KeeperOnResourceUpdateReconcile = "reconcile"
+
 	// Default values for ClickHouse user configuration
 	// 1. user/profile
 	// 2. user/quota
@@ -381,6 +390,38 @@ type OperatorConfigClickHouse struct {
 	} `json:"metrics" yaml:"metrics"`
 }
 
+// OperatorConfigCoordination specifies coordination with external systems during reconcile.
+type OperatorConfigCoordination struct {
+	// Keeper specifies keeper-related coordination settings.
+	Keeper OperatorConfigCoordinationKeeper `json:"keeper" yaml:"keeper"`
+}
+
+// MergeFrom merges coordination settings from another config, filling empty values.
+func (c OperatorConfigCoordination) MergeFrom(from OperatorConfigCoordination) OperatorConfigCoordination {
+	c.Keeper = c.Keeper.MergeFrom(from.Keeper)
+	return c
+}
+
+// OperatorConfigCoordinationKeeper specifies keeper-related coordination settings.
+type OperatorConfigCoordinationKeeper struct {
+	// ReadyTimeout specifies how long the operator waits for a referenced
+	// ClickHouseKeeper to become ready before aborting CHI reconcile. In seconds.
+	ReadyTimeout int `json:"readyTimeout" yaml:"readyTimeout"`
+	// OnKeeperResourceUpdate specifies the reaction when a referenced CHK resource changes.
+	//   nil / "none" (default) — do nothing, backward-compatible
+	//   "reconcile"            — trigger reconcile of dependent CHIs
+	OnKeeperResourceUpdate *types.String `json:"onKeeperResourceUpdate,omitempty" yaml:"onKeeperResourceUpdate,omitempty"`
+}
+
+// MergeFrom merges keeper coordination settings from another config, filling empty values.
+func (k OperatorConfigCoordinationKeeper) MergeFrom(from OperatorConfigCoordinationKeeper) OperatorConfigCoordinationKeeper {
+	if k.ReadyTimeout == 0 && from.ReadyTimeout > 0 {
+		k.ReadyTimeout = from.ReadyTimeout
+	}
+	k.OnKeeperResourceUpdate = k.OnKeeperResourceUpdate.MergeFrom(from.OnKeeperResourceUpdate)
+	return k
+}
+
 // OperatorConfigKeeper specifies Keeper section
 type OperatorConfigKeeper struct {
 	Config OperatorConfigConfig `json:"configuration" yaml:"configuration"`
@@ -457,6 +498,9 @@ type OperatorConfigReconcile struct {
 	} `json:"statefulSet" yaml:"statefulSet"`
 
 	Host ReconcileHost `json:"host" yaml:"host"`
+
+	// Coordination specifies how the operator coordinates with external systems during reconcile.
+	Coordination OperatorConfigCoordination `json:"coordination" yaml:"coordination"`
 }
 
 type OperatorConfigReconcileRuntime struct {
@@ -1154,6 +1198,12 @@ func (c *OperatorConfig) normalizeSectionClickHouseMetrics() {
 	}
 }
 
+func (c *OperatorConfig) normalizeSectionReconcileCoordination() {
+	if c.Reconcile.Coordination.Keeper.ReadyTimeout <= 0 {
+		c.Reconcile.Coordination.Keeper.ReadyTimeout = defaultKeeperReadyTimeout
+	}
+}
+
 func (c *OperatorConfig) normalizeSectionLogger() {
 	// Logtostderr      string `json:"logtostderr"      yaml:"logtostderr"`
 	// Alsologtostderr  string `json:"alsologtostderr"  yaml:"alsologtostderr"`
@@ -1210,6 +1260,7 @@ func (c *OperatorConfig) normalize() {
 	c.normalizeSectionClickHouseConfigurationFile()
 	c.normalizeSectionClickHouseConfigurationUserDefault()
 	c.normalizeSectionClickHouseAccess()
+	c.normalizeSectionReconcileCoordination()
 	c.normalizeSectionClickHouseMetrics()
 	c.normalizeSectionKeeperConfigurationFile()
 	c.normalizeSectionTemplate()
