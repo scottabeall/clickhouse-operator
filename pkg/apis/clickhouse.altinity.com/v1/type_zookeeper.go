@@ -22,28 +22,58 @@ import (
 	"github.com/altinity/clickhouse-operator/pkg/apis/common/types"
 )
 
-// ZookeeperConfig defines zookeeper section of .spec.configuration
-// Refers to
-// https://clickhouse.com/docs/operations/server-configuration-parameters/settings#zookeeper
+// ZookeeperConfig defines zookeeper section of .spec.configuration.
+// Maps to ClickHouse server's <zookeeper> XML configuration section.
+// Ref: https://clickhouse.com/docs/operations/server-configuration-parameters/settings#zookeeper
 type ZookeeperConfig struct {
-	Nodes              ZookeeperNodes    `json:"nodes,omitempty"                yaml:"nodes,omitempty"`
-	SessionTimeoutMs   int               `json:"session_timeout_ms,omitempty"   yaml:"session_timeout_ms,omitempty"`
-	OperationTimeoutMs int               `json:"operation_timeout_ms,omitempty" yaml:"operation_timeout_ms,omitempty"`
-	Root               string            `json:"root,omitempty"                 yaml:"root,omitempty"`
-	Identity           string            `json:"identity,omitempty"             yaml:"identity,omitempty"`
-	UseCompression     *types.StringBool `json:"use_compression,omitempty"      yaml:"use_compression,omitempty"`
+	// Nodes is a list of ZooKeeper/Keeper endpoints (host:port pairs).
+	// Rendered as <zookeeper><node><host>...</host><port>...</port></node></zookeeper> in ClickHouse config.
+	Nodes ZookeeperNodes `json:"nodes,omitempty" yaml:"nodes,omitempty"`
+	// Keeper is a reference to a ClickHouseKeeperInstallation (CHK) custom resource.
+	// When specified, the operator resolves CHK service endpoints into Nodes automatically before reconcile.
+	// Either Nodes or Keeper may be specified. If Keeper is set, resolved nodes are appended to Nodes.
+	Keeper *KeeperRef `json:"keeper,omitempty" yaml:"keeper,omitempty"`
+	// SessionTimeoutMs is the ZooKeeper session timeout in milliseconds.
+	// Rendered as <zookeeper><session_timeout_ms>...</session_timeout_ms></zookeeper>.
+	SessionTimeoutMs int `json:"session_timeout_ms,omitempty" yaml:"session_timeout_ms,omitempty"`
+	// OperationTimeoutMs is the timeout for a single ZooKeeper operation in milliseconds.
+	// Rendered as <zookeeper><operation_timeout_ms>...</operation_timeout_ms></zookeeper>.
+	OperationTimeoutMs int `json:"operation_timeout_ms,omitempty" yaml:"operation_timeout_ms,omitempty"`
+	// Root is an optional ZooKeeper root znode path prefix for all ClickHouse znodes.
+	// Rendered as <zookeeper><root>...</root></zookeeper>.
+	Root string `json:"root,omitempty" yaml:"root,omitempty"`
+	// Identity is the ZooKeeper digest authentication credentials in "user:password" format.
+	// Rendered as <zookeeper><identity>...</identity></zookeeper>.
+	Identity string `json:"identity,omitempty" yaml:"identity,omitempty"`
+	// UseCompression enables the Keeper protocol compression for client-server communication.
+	// Rendered as <zookeeper><use_compression>...</use_compression></zookeeper>.
+	UseCompression *types.StringBool `json:"use_compression,omitempty" yaml:"use_compression,omitempty"`
 }
 
+// ZookeeperNodes is a typed slice of ZookeeperNode providing convenience accessors.
 type ZookeeperNodes []ZookeeperNode
 
+// NewZookeeperNodes creates a ZookeeperNodes list from the given nodes.
+func NewZookeeperNodes(nodes ...ZookeeperNode) ZookeeperNodes {
+	return ZookeeperNodes(nodes)
+}
+
+// Append adds one or more nodes to the list and returns the updated list.
+func (n ZookeeperNodes) Append(nodes ...ZookeeperNode) ZookeeperNodes {
+	return append(n, nodes...)
+}
+
+// Len returns the number of nodes in the list.
 func (n ZookeeperNodes) Len() int {
 	return len(n)
 }
 
+// First returns the first node in the list. Panics if the list is empty.
 func (n ZookeeperNodes) First() ZookeeperNode {
 	return n[0]
 }
 
+// Servers returns a string slice of all nodes in "host:port" format.
 func (n ZookeeperNodes) Servers() []string {
 	var servers []string
 	for _, node := range n {
@@ -52,25 +82,34 @@ func (n ZookeeperNodes) Servers() []string {
 	return servers
 }
 
+// String returns a comma-separated list of all nodes in "host:port" format.
 func (n ZookeeperNodes) String() string {
 	return strings.Join(n.Servers(), ",")
 }
 
-// NewZookeeperConfig creates new ZookeeperConfig object
+// NewZookeeperConfig creates a new empty ZookeeperConfig.
 func NewZookeeperConfig() *ZookeeperConfig {
 	return new(ZookeeperConfig)
 }
 
-// IsEmpty checks whether config is empty
+// IsEmpty returns true if no ZooKeeper connectivity is configured (no nodes and no keeper reference).
 func (zkc *ZookeeperConfig) IsEmpty() bool {
 	if zkc == nil {
 		return true
 	}
 
-	return len(zkc.Nodes) == 0
+	return len(zkc.Nodes) == 0 && !zkc.HasKeeper()
 }
 
-// MergeFrom merges from provided object
+// HasKeeper returns true if a keeper reference with a non-empty name is specified.
+func (zkc *ZookeeperConfig) HasKeeper() bool {
+	return zkc != nil && zkc.Keeper.HasName()
+}
+
+// MergeFrom merges ZooKeeper configuration from the provided source.
+// Nodes are appended (duplicates skipped by equality check).
+// Keeper reference is adopted from source only if the receiver has none.
+// Scalar fields (timeouts, root, identity) are overwritten by non-zero source values.
 func (zkc *ZookeeperConfig) MergeFrom(from *ZookeeperConfig, _type MergeType) *ZookeeperConfig {
 	if from == nil {
 		return zkc
@@ -81,29 +120,31 @@ func (zkc *ZookeeperConfig) MergeFrom(from *ZookeeperConfig, _type MergeType) *Z
 	}
 
 	if !from.IsEmpty() {
-		// Append Nodes from `from`
+		// Append unique nodes from source
 		if zkc.Nodes == nil {
 			zkc.Nodes = make([]ZookeeperNode, 0)
 		}
 		for fromIndex := range from.Nodes {
 			fromNode := &from.Nodes[fromIndex]
 
-			// Try to find equal entry
 			equalFound := false
 			for toIndex := range zkc.Nodes {
 				toNode := &zkc.Nodes[toIndex]
 				if toNode.Equal(fromNode) {
-					// Received already have such a node
 					equalFound = true
 					break
 				}
 			}
 
 			if !equalFound {
-				// Append Node from `from`
 				zkc.Nodes = append(zkc.Nodes, *fromNode.DeepCopy())
 			}
 		}
+	}
+
+	// Adopt keeper reference from source if receiver has none
+	if zkc.Keeper.IsEmpty() && !from.Keeper.IsEmpty() {
+		zkc.Keeper = from.Keeper.DeepCopy()
 	}
 
 	if from.SessionTimeoutMs > 0 {
@@ -123,7 +164,7 @@ func (zkc *ZookeeperConfig) MergeFrom(from *ZookeeperConfig, _type MergeType) *Z
 	return zkc
 }
 
-// Equals checks whether config is equal to another one
+// Equals returns true if both ZookeeperConfig objects are structurally identical.
 func (zkc *ZookeeperConfig) Equals(b *ZookeeperConfig) bool {
 	_, equals := messagediff.DeepDiff(zkc, b)
 	return equals
