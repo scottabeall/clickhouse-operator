@@ -487,6 +487,30 @@ spec:
                               nullable: true
                               items:
                                 !!merge <<: *TypeHookActionChop
+                    coordination:
+                      type: object
+                      description: "Coordination with external systems during reconcile"
+                      properties:
+                        keeper:
+                          type: object
+                          description: "Keeper-related coordination settings"
+                          properties:
+                            readyTimeout:
+                              type: integer
+                              minimum: 1
+                              description: |
+                                How long the operator waits for a referenced ClickHouseKeeper to become ready
+                                before aborting CHI reconcile. In seconds. Default is 120.
+                            onKeeperResourceUpdate:
+                              type: string
+                              description: |
+                                Reaction when a referenced CHK resource changes.
+                                  none (default) — do nothing
+                                  reconcile — trigger CHI reconcile
+                              enum:
+                                - ""
+                                - "none"
+                                - "reconcile"
                 annotation:
                   type: object
                   description: "defines which metadata.annotations items will include or exclude during render StatefulSet, Pod, PVC resources"
