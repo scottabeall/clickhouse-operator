@@ -15,6 +15,8 @@
 package namer
 
 import (
+	"fmt"
+
 	api "github.com/altinity/clickhouse-operator/pkg/apis/clickhouse.altinity.com/v1"
 	"github.com/altinity/clickhouse-operator/pkg/apis/common/types"
 	"github.com/altinity/clickhouse-operator/pkg/interfaces"
@@ -106,4 +108,15 @@ func (n *Namer) Name(what interfaces.NameType, params ...any) string {
 
 func (n *Namer) Names(what interfaces.NameType, params ...any) []string {
 	return nil
+}
+
+// ServiceFQDN builds a FQDN for a given service name and namespace,
+// respecting the optional namespaceDomainPattern (e.g., from CHI spec).
+// Use this when you already have a service name and just need the domain suffix applied.
+func (n *Namer) ServiceFQDN(serviceName, namespace string, namespaceDomainPattern *types.String) string {
+	pattern := patternServiceFQDN
+	if namespaceDomainPattern.HasValue() {
+		pattern = "%s." + namespaceDomainPattern.Value()
+	}
+	return fmt.Sprintf(pattern, serviceName, namespace)
 }
