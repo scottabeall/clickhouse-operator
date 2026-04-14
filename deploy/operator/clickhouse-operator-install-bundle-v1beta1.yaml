@@ -806,6 +806,28 @@ spec:
                           availabilityZone:
                             type: string
                             description: "availability zone for Zookeeper node"
+                    keeper:
+                      type: object
+                      description: |
+                        reference to a ClickHouseKeeperInstallation (CHK) resource.
+                        The operator resolves this to ZooKeeper node addresses automatically.
+                      properties:
+                        name:
+                          type: string
+                          description: "name of the ClickHouseKeeperInstallation custom resource"
+                        namespace:
+                          type: string
+                          description: "namespace of the CHK resource, defaults to the CHI namespace if omitted"
+                        serviceType:
+                          type: string
+                          description: |
+                            how to discover keeper endpoints:
+                              replicas (default) — enumerate per-host services, one ZK node per keeper replica
+                              service — use the CR-level headless service as a single ZK node entry
+                          enum:
+                            - ""
+                            - "replicas"
+                            - "service"
                     session_timeout_ms:
                       type: integer
                       description: "session timeout during connect to Zookeeper"
@@ -2380,6 +2402,28 @@ spec:
                           availabilityZone:
                             type: string
                             description: "availability zone for Zookeeper node"
+                    keeper:
+                      type: object
+                      description: |
+                        reference to a ClickHouseKeeperInstallation (CHK) resource.
+                        The operator resolves this to ZooKeeper node addresses automatically.
+                      properties:
+                        name:
+                          type: string
+                          description: "name of the ClickHouseKeeperInstallation custom resource"
+                        namespace:
+                          type: string
+                          description: "namespace of the CHK resource, defaults to the CHI namespace if omitted"
+                        serviceType:
+                          type: string
+                          description: |
+                            how to discover keeper endpoints:
+                              replicas (default) — enumerate per-host services, one ZK node per keeper replica
+                              service — use the CR-level headless service as a single ZK node entry
+                          enum:
+                            - ""
+                            - "replicas"
+                            - "service"
                     session_timeout_ms:
                       type: integer
                       description: "session timeout during connect to Zookeeper"
@@ -3633,6 +3677,30 @@ spec:
                           nullable: true
                           items:
                             !!merge <<: *TypeHookActionChop
+                coordination:
+                  type: object
+                  description: "Coordination with external systems during reconcile"
+                  properties:
+                    keeper:
+                      type: object
+                      description: "Keeper-related coordination settings"
+                      properties:
+                        readyTimeout:
+                          type: integer
+                          minimum: 1
+                          description: |
+                            How long the operator waits for a referenced ClickHouseKeeper to become ready
+                            before aborting CHI reconcile. In seconds. Default is 120.
+                        onKeeperResourceUpdate:
+                          type: string
+                          description: |
+                            Reaction when a referenced CHK resource changes.
+                              none (default) — do nothing
+                              reconcile — trigger CHI reconcile
+                          enum:
+                            - ""
+                            - "none"
+                            - "reconcile"
             annotation:
               type: object
               description: "defines which metadata.annotations items will include or exclude during render StatefulSet, Pod, PVC resources"
@@ -5580,6 +5648,21 @@ data:
             onLostVolume: yes
             # Whether the operator during reconcile procedure should drop active replicas when replica is deleted or recreated
             active: no
+
+      ################################################
+      ##
+      ## Coordination with external systems during reconcile
+      ##
+      ################################################
+      coordination:
+        keeper:
+          # How long the operator waits for a referenced ClickHouseKeeper to become ready
+          # before aborting CHI reconcile. In seconds.
+          readyTimeout: 120
+          # Reaction when a referenced CHK resource changes:
+          #   none      — do nothing (default, backward-compatible)
+          #   reconcile — trigger CHI reconcile
+          # onKeeperResourceUpdate: none
 
     ################################################
     ##
