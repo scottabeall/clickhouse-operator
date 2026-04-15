@@ -7,7 +7,7 @@ kind: CustomResourceDefinition
 metadata:
   name: clickhouseoperatorconfigurations.clickhouse.altinity.com
   labels:
-    clickhouse.altinity.com/chop: 0.27.0
+    clickhouse.altinity.com/chop: 0.26.3
 spec:
   group: clickhouse.altinity.com
   scope: Namespaced
@@ -437,80 +437,6 @@ spec:
                                   !!merge <<: *TypeStringBool
                                   description: |
                                     Whether the operator during reconcile procedure should drop active replicas when replica is deleted or recreated
-                        hooks:
-                          type: object
-                          description: "default host-level hooks to execute before and after host reconcile"
-                          properties:
-                            pre:
-                              type: array
-                              description: "actions to execute before host reconcile"
-                              nullable: true
-                              items: &TypeHookActionChop
-                                type: object
-                                properties:
-                                  sql:
-                                    type: object
-                                    properties:
-                                      queries:
-                                        type: array
-                                        nullable: true
-                                        items:
-                                          type: string
-                                  shell:
-                                    type: object
-                                    properties:
-                                      command:
-                                        type: array
-                                        nullable: true
-                                        items:
-                                          type: string
-                                      container:
-                                        type: string
-                                  http:
-                                    type: object
-                                    properties:
-                                      url:
-                                        type: string
-                                      method:
-                                        type: string
-                                  target:
-                                    type: string
-                                    description: "where to execute hook: firstHost (default), allHosts, allShards"
-                                    enum:
-                                      - ""
-                                      - "firstHost"
-                                      - "allHosts"
-                                      - "allShards"
-                            post:
-                              type: array
-                              description: "actions to execute after host reconcile"
-                              nullable: true
-                              items:
-                                !!merge <<: *TypeHookActionChop
-                    coordination:
-                      type: object
-                      description: "Coordination with external systems during reconcile"
-                      properties:
-                        keeper:
-                          type: object
-                          description: "Keeper-related coordination settings"
-                          properties:
-                            readyTimeout:
-                              type: integer
-                              minimum: 1
-                              description: |
-                                How long the operator waits for a referenced ClickHouseKeeper to become ready
-                                before aborting CHI reconcile. In seconds. Default is 120.
-                            onKeeperResourceUpdate:
-                              type: string
-                              description: |
-                                Reaction when a referenced CHK resource changes.
-                                  none (default) — do nothing
-                                  reconcile — trigger CHI reconcile
-                              enum:
-                                - ""
-                                - "none"
-                                - "reconcile"
                 annotation:
                   type: object
                   description: "defines which metadata.annotations items will include or exclude during render StatefulSet, Pod, PVC resources"

@@ -4,14 +4,14 @@
 # SINGULAR=clickhouseinstallation
 # PLURAL=clickhouseinstallations
 # SHORT=chi
-# OPERATOR_VERSION=0.27.0
+# OPERATOR_VERSION=0.26.3
 #
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: clickhouseinstallations.clickhouse.altinity.com
   labels:
-    clickhouse.altinity.com/chop: 0.27.0
+    clickhouse.altinity.com/chop: 0.26.3
 spec:
   group: clickhouse.altinity.com
   scope: Namespaced
@@ -640,56 +640,6 @@ spec:
                                   !!merge <<: *TypeStringBool
                                   description: |
                                     Whether the operator during reconcile procedure should drop active replicas when replica is deleted or recreated
-                        hooks: &TypeReconcileHooks
-                          type: object
-                          description: "hooks to execute before and after host reconcile"
-                          properties:
-                            pre:
-                              type: array
-                              description: "actions to execute before reconcile"
-                              nullable: true
-                              items: &TypeHookAction
-                                type: object
-                                properties:
-                                  sql:
-                                    type: object
-                                    properties:
-                                      queries:
-                                        type: array
-                                        nullable: true
-                                        items:
-                                          type: string
-                                  shell:
-                                    type: object
-                                    properties:
-                                      command:
-                                        type: array
-                                        nullable: true
-                                        items:
-                                          type: string
-                                      container:
-                                        type: string
-                                  http:
-                                    type: object
-                                    properties:
-                                      url:
-                                        type: string
-                                      method:
-                                        type: string
-                                  target:
-                                    type: string
-                                    description: "where to execute hook for cluster-level hooks: firstHost (default), allHosts, allShards"
-                                    enum:
-                                      - ""
-                                      - "firstHost"
-                                      - "allHosts"
-                                      - "allShards"
-                            post:
-                              type: array
-                              description: "actions to execute after reconcile"
-                              nullable: true
-                              items:
-                                !!merge <<: *TypeHookAction
                 reconcile:
                   !!merge <<: *TypeReconcile
                   description: "Optional, allows tuning reconciling cycle for ClickhouseInstallation from clickhouse-operator side"
@@ -811,28 +761,6 @@ spec:
                               availabilityZone:
                                 type: string
                                 description: "availability zone for Zookeeper node"
-                        keeper:
-                          type: object
-                          description: |
-                            reference to a ClickHouseKeeperInstallation (CHK) resource.
-                            The operator resolves this to ZooKeeper node addresses automatically.
-                          properties:
-                            name:
-                              type: string
-                              description: "name of the ClickHouseKeeperInstallation custom resource"
-                            namespace:
-                              type: string
-                              description: "namespace of the CHK resource, defaults to the CHI namespace if omitted"
-                            serviceType:
-                              type: string
-                              description: |
-                                how to discover keeper endpoints:
-                                  replicas (default) — enumerate per-host services, one ZK node per keeper replica
-                                  service — use the CR-level headless service as a single ZK node entry
-                              enum:
-                                - ""
-                                - "replicas"
-                                - "service"
                         session_timeout_ms:
                           type: integer
                           description: "session timeout during connect to Zookeeper"
@@ -1049,9 +977,6 @@ spec:
                                 !!merge <<: *TypeReconcileRuntime
                               host:
                                 !!merge <<: *TypeReconcileHost
-                              hooks:
-                                !!merge <<: *TypeReconcileHooks
-                                description: "cluster-level hooks to execute before and after cluster reconcile"
                           layout:
                             type: object
                             description: |
