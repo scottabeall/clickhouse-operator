@@ -63,7 +63,7 @@ func initKeeper(ctx context.Context) error {
 
 	// Build the apiextensions client for CRD deletion checks during CHK cleanup.
 	// Uses the same kubeConfigFile/masterURL package vars as the CHI thread.
-	_, extClient, _ := chop.GetClientset(kubeConfigFile, masterURL)
+	_, extClient, _, _ := chop.GetClientset(kubeConfigFile, masterURL)
 
 	err = ctrlRuntime.
 		NewControllerManagedBy(manager).
