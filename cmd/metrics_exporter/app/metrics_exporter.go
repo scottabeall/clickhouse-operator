@@ -18,7 +18,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/altinity/clickhouse-operator/pkg/metrics/clickhouse"
 	"os"
 	"os/signal"
 	"syscall"
@@ -27,6 +26,7 @@ import (
 	// log "k8s.io/klog"
 
 	"github.com/altinity/clickhouse-operator/pkg/chop"
+	"github.com/altinity/clickhouse-operator/pkg/metrics/clickhouse"
 	"github.com/altinity/clickhouse-operator/pkg/version"
 )
 
@@ -90,7 +90,7 @@ func Run() {
 	log.Infof("Starting metrics exporter. Version:%s GitSHA:%s BuiltAt:%s\n", version.Version, version.GitSHA, version.BuiltAt)
 
 	// Initialize k8s API clients
-	kubeClient, _, chopClient := chop.GetClientset(kubeConfigFile, masterURL)
+	kubeClient, _, chopClient, _ := chop.GetClientset(kubeConfigFile, masterURL)
 
 	// Create operator instance
 	chop.New(kubeClient, chopClient, chopConfigFile)
