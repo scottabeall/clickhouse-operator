@@ -33,6 +33,7 @@ import (
 	kubeTypes "k8s.io/apimachinery/pkg/types"
 	utilRuntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/dynamic"
 	kubeInformers "k8s.io/client-go/informers"
 	kube "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -68,9 +69,10 @@ type Controller struct {
 	//
 	// Native clients
 	//
-	kubeClient kube.Interface
-	extClient  apiExtensions.Interface
-	chopClient chopClientSet.Interface
+	kubeClient    kube.Interface
+	extClient     apiExtensions.Interface
+	chopClient    chopClientSet.Interface
+	dynamicClient dynamic.Interface
 
 	// queues used to organize events queue processed by the operator
 	queues []queue.PriorityQueue
@@ -87,6 +89,7 @@ func NewController(
 	chopClient chopClientSet.Interface,
 	extClient apiExtensions.Interface,
 	kubeClient kube.Interface,
+	dynamicClient dynamic.Interface,
 	chopInformerFactory chopInformers.SharedInformerFactory,
 	kubeInformerFactory kubeInformers.SharedInformerFactory,
 ) *Controller {
@@ -114,14 +117,15 @@ func NewController(
 
 	// Create Controller instance
 	controller := &Controller{
-		kubeClient:  kubeClient,
-		extClient:   extClient,
-		chopClient:  chopClient,
-		recorder:    recorder,
-		namer:       namer,
-		kube:        kube,
-		ctrlLabeler: ctrlLabeler.New(kube),
-		pvcDeleter:  volume.NewPVCDeleter(managers.NewNameManager(managers.NameManagerTypeClickHouse)),
+		kubeClient:    kubeClient,
+		extClient:     extClient,
+		chopClient:    chopClient,
+		dynamicClient: dynamicClient,
+		recorder:      recorder,
+		namer:         namer,
+		kube:          kube,
+		ctrlLabeler:   ctrlLabeler.New(kube),
+		pvcDeleter:    volume.NewPVCDeleter(managers.NewNameManager(managers.NameManagerTypeClickHouse)),
 	}
 	controller.initQueues()
 	controller.addEventHandlers(chopInformerFactory, kubeInformerFactory)
