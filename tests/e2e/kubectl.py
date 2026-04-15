@@ -352,7 +352,7 @@ def apply(manifest, ns=None, validate=True, timeout=600, shell=None):
                     launch(f"apply --validate={validate} -f {manifest}", ns=ns, timeout=timeout, shell=shell)
                 else:
                     run_shell(
-                        f"set -o pipefail && {manifest} | {current().context.kubectl_cmd} apply --namespace={current().context.test_namespace} --validate={validate} -f -",
+                        f"set -o pipefail && {manifest} | {current().context.kubectl_cmd} apply --server-side --force-conflicts --namespace={current().context.test_namespace} --validate={validate} -f -",
                         timeout=timeout,
                         shell=shell
                     )
