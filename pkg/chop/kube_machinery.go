@@ -22,6 +22,7 @@ import (
 	"strconv"
 
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/client-go/dynamic"
 	kube "k8s.io/client-go/kubernetes"
 	kuberest "k8s.io/client-go/rest"
 	kubeclientcmd "k8s.io/client-go/tools/clientcmd"
@@ -68,6 +69,7 @@ func GetClientset(kubeConfigFile, masterURL string) (
 	*kube.Clientset,
 	*apiextensions.Clientset,
 	*chopclientset.Clientset,
+	dynamic.Interface,
 ) {
 	kubeConfig, err := getKubeConfig(kubeConfigFile, masterURL)
 	if err != nil {
@@ -114,5 +116,10 @@ func GetClientset(kubeConfigFile, masterURL string) (
 		log.F().Fatal("Unable to initialize clickhouse-operator API clientset: %s", err.Error())
 	}
 
-	return kubeClientset, apiextensionsClientset, chopClientset
+	dynamicClientset, err := dynamic.NewForConfig(kubeConfig)
+	if err != nil {
+		log.F().Fatal("Unable to initialize kubernetes dynamic clientset: %s", err.Error())
+	}
+
+	return kubeClientset, apiextensionsClientset, chopClientset, dynamicClientset
 }
