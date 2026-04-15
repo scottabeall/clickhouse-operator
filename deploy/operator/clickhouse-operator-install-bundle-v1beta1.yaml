@@ -4,14 +4,14 @@
 # SINGULAR=clickhouseinstallation
 # PLURAL=clickhouseinstallations
 # SHORT=chi
-# OPERATOR_VERSION=0.26.3
+# OPERATOR_VERSION=0.27.0
 #
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
   name: clickhouseinstallations.clickhouse.altinity.com
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
 spec:
   group: clickhouse.altinity.com
   scope: Namespaced
@@ -635,6 +635,56 @@ spec:
                               !!merge <<: *TypeStringBool
                               description: |
                                 Whether the operator during reconcile procedure should drop active replicas when replica is deleted or recreated
+                    hooks: &TypeReconcileHooks
+                      type: object
+                      description: "hooks to execute before and after host reconcile"
+                      properties:
+                        pre:
+                          type: array
+                          description: "actions to execute before reconcile"
+                          nullable: true
+                          items: &TypeHookAction
+                            type: object
+                            properties:
+                              sql:
+                                type: object
+                                properties:
+                                  queries:
+                                    type: array
+                                    nullable: true
+                                    items:
+                                      type: string
+                              shell:
+                                type: object
+                                properties:
+                                  command:
+                                    type: array
+                                    nullable: true
+                                    items:
+                                      type: string
+                                  container:
+                                    type: string
+                              http:
+                                type: object
+                                properties:
+                                  url:
+                                    type: string
+                                  method:
+                                    type: string
+                              target:
+                                type: string
+                                description: "where to execute hook for cluster-level hooks: firstHost (default), allHosts, allShards"
+                                enum:
+                                  - ""
+                                  - "firstHost"
+                                  - "allHosts"
+                                  - "allShards"
+                        post:
+                          type: array
+                          description: "actions to execute after reconcile"
+                          nullable: true
+                          items:
+                            !!merge <<: *TypeHookAction
             reconcile:
               !!merge <<: *TypeReconcile
               description: "Optional, allows tuning reconciling cycle for ClickhouseInstallation from clickhouse-operator side"
@@ -756,6 +806,28 @@ spec:
                           availabilityZone:
                             type: string
                             description: "availability zone for Zookeeper node"
+                    keeper:
+                      type: object
+                      description: |
+                        reference to a ClickHouseKeeperInstallation (CHK) resource.
+                        The operator resolves this to ZooKeeper node addresses automatically.
+                      properties:
+                        name:
+                          type: string
+                          description: "name of the ClickHouseKeeperInstallation custom resource"
+                        namespace:
+                          type: string
+                          description: "namespace of the CHK resource, defaults to the CHI namespace if omitted"
+                        serviceType:
+                          type: string
+                          description: |
+                            how to discover keeper endpoints:
+                              replicas (default) — enumerate per-host services, one ZK node per keeper replica
+                              service — use the CR-level headless service as a single ZK node entry
+                          enum:
+                            - ""
+                            - "replicas"
+                            - "service"
                     session_timeout_ms:
                       type: integer
                       description: "session timeout during connect to Zookeeper"
@@ -972,6 +1044,9 @@ spec:
                             !!merge <<: *TypeReconcileRuntime
                           host:
                             !!merge <<: *TypeReconcileHost
+                          hooks:
+                            !!merge <<: *TypeReconcileHooks
+                            description: "cluster-level hooks to execute before and after cluster reconcile"
                       layout:
                         type: object
                         description: |
@@ -1527,14 +1602,14 @@ spec:
 # SINGULAR=clickhouseinstallationtemplate
 # PLURAL=clickhouseinstallationtemplates
 # SHORT=chit
-# OPERATOR_VERSION=0.26.3
+# OPERATOR_VERSION=0.27.0
 #
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
   name: clickhouseinstallationtemplates.clickhouse.altinity.com
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
 spec:
   group: clickhouse.altinity.com
   scope: Namespaced
@@ -2156,6 +2231,56 @@ spec:
                               !!merge <<: *TypeStringBool
                               description: |
                                 Whether the operator during reconcile procedure should drop active replicas when replica is deleted or recreated
+                    hooks: &TypeReconcileHooks
+                      type: object
+                      description: "hooks to execute before and after host reconcile"
+                      properties:
+                        pre:
+                          type: array
+                          description: "actions to execute before reconcile"
+                          nullable: true
+                          items: &TypeHookAction
+                            type: object
+                            properties:
+                              sql:
+                                type: object
+                                properties:
+                                  queries:
+                                    type: array
+                                    nullable: true
+                                    items:
+                                      type: string
+                              shell:
+                                type: object
+                                properties:
+                                  command:
+                                    type: array
+                                    nullable: true
+                                    items:
+                                      type: string
+                                  container:
+                                    type: string
+                              http:
+                                type: object
+                                properties:
+                                  url:
+                                    type: string
+                                  method:
+                                    type: string
+                              target:
+                                type: string
+                                description: "where to execute hook for cluster-level hooks: firstHost (default), allHosts, allShards"
+                                enum:
+                                  - ""
+                                  - "firstHost"
+                                  - "allHosts"
+                                  - "allShards"
+                        post:
+                          type: array
+                          description: "actions to execute after reconcile"
+                          nullable: true
+                          items:
+                            !!merge <<: *TypeHookAction
             reconcile:
               !!merge <<: *TypeReconcile
               description: "Optional, allows tuning reconciling cycle for ClickhouseInstallation from clickhouse-operator side"
@@ -2277,6 +2402,28 @@ spec:
                           availabilityZone:
                             type: string
                             description: "availability zone for Zookeeper node"
+                    keeper:
+                      type: object
+                      description: |
+                        reference to a ClickHouseKeeperInstallation (CHK) resource.
+                        The operator resolves this to ZooKeeper node addresses automatically.
+                      properties:
+                        name:
+                          type: string
+                          description: "name of the ClickHouseKeeperInstallation custom resource"
+                        namespace:
+                          type: string
+                          description: "namespace of the CHK resource, defaults to the CHI namespace if omitted"
+                        serviceType:
+                          type: string
+                          description: |
+                            how to discover keeper endpoints:
+                              replicas (default) — enumerate per-host services, one ZK node per keeper replica
+                              service — use the CR-level headless service as a single ZK node entry
+                          enum:
+                            - ""
+                            - "replicas"
+                            - "service"
                     session_timeout_ms:
                       type: integer
                       description: "session timeout during connect to Zookeeper"
@@ -2493,6 +2640,9 @@ spec:
                             !!merge <<: *TypeReconcileRuntime
                           host:
                             !!merge <<: *TypeReconcileHost
+                          hooks:
+                            !!merge <<: *TypeReconcileHooks
+                            description: "cluster-level hooks to execute before and after cluster reconcile"
                       layout:
                         type: object
                         description: |
@@ -3051,7 +3201,7 @@ kind: CustomResourceDefinition
 metadata:
   name: clickhouseoperatorconfigurations.clickhouse.altinity.com
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
 spec:
   group: clickhouse.altinity.com
   scope: Namespaced
@@ -3477,6 +3627,80 @@ spec:
                               !!merge <<: *TypeStringBool
                               description: |
                                 Whether the operator during reconcile procedure should drop active replicas when replica is deleted or recreated
+                    hooks:
+                      type: object
+                      description: "default host-level hooks to execute before and after host reconcile"
+                      properties:
+                        pre:
+                          type: array
+                          description: "actions to execute before host reconcile"
+                          nullable: true
+                          items: &TypeHookActionChop
+                            type: object
+                            properties:
+                              sql:
+                                type: object
+                                properties:
+                                  queries:
+                                    type: array
+                                    nullable: true
+                                    items:
+                                      type: string
+                              shell:
+                                type: object
+                                properties:
+                                  command:
+                                    type: array
+                                    nullable: true
+                                    items:
+                                      type: string
+                                  container:
+                                    type: string
+                              http:
+                                type: object
+                                properties:
+                                  url:
+                                    type: string
+                                  method:
+                                    type: string
+                              target:
+                                type: string
+                                description: "where to execute hook: firstHost (default), allHosts, allShards"
+                                enum:
+                                  - ""
+                                  - "firstHost"
+                                  - "allHosts"
+                                  - "allShards"
+                        post:
+                          type: array
+                          description: "actions to execute after host reconcile"
+                          nullable: true
+                          items:
+                            !!merge <<: *TypeHookActionChop
+                coordination:
+                  type: object
+                  description: "Coordination with external systems during reconcile"
+                  properties:
+                    keeper:
+                      type: object
+                      description: "Keeper-related coordination settings"
+                      properties:
+                        readyTimeout:
+                          type: integer
+                          minimum: 1
+                          description: |
+                            How long the operator waits for a referenced ClickHouseKeeper to become ready
+                            before aborting CHI reconcile. In seconds. Default is 120.
+                        onKeeperResourceUpdate:
+                          type: string
+                          description: |
+                            Reaction when a referenced CHK resource changes.
+                              none (default) — do nothing
+                              reconcile — trigger CHI reconcile
+                          enum:
+                            - ""
+                            - "none"
+                            - "reconcile"
             annotation:
               type: object
               description: "defines which metadata.annotations items will include or exclude during render StatefulSet, Pod, PVC resources"
@@ -3604,14 +3828,14 @@ spec:
 ---
 # Template Parameters:
 #
-# OPERATOR_VERSION=0.26.3
+# OPERATOR_VERSION=0.27.0
 #
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: clickhousekeeperinstallations.clickhouse-keeper.altinity.com
   labels:
-    clickhouse-keeper.altinity.com/chop: 0.26.3
+    clickhouse-keeper.altinity.com/chop: 0.27.0
 spec:
   group: clickhouse-keeper.altinity.com
   scope: Namespaced
@@ -4491,7 +4715,7 @@ metadata:
   name: clickhouse-operator
   namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
 
 # Template Parameters:
 #
@@ -4516,7 +4740,7 @@ metadata:
   name: clickhouse-operator-kube-system
   #namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
 rules:
   #
   # Core API group
@@ -4736,7 +4960,7 @@ metadata:
   name: clickhouse-operator-kube-system
   #namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -4769,7 +4993,7 @@ metadata:
   name: clickhouse-operator
   namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
 rules:
   #
   # Core API group
@@ -4989,7 +5213,7 @@ metadata:
   name: clickhouse-operator
   namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -5011,7 +5235,7 @@ metadata:
   name: etc-clickhouse-operator-files
   namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
     app: clickhouse-operator
 data:
   config.yaml: |
@@ -5425,6 +5649,21 @@ data:
             # Whether the operator during reconcile procedure should drop active replicas when replica is deleted or recreated
             active: no
 
+      ################################################
+      ##
+      ## Coordination with external systems during reconcile
+      ##
+      ################################################
+      coordination:
+        keeper:
+          # How long the operator waits for a referenced ClickHouseKeeper to become ready
+          # before aborting CHI reconcile. In seconds.
+          readyTimeout: 120
+          # Reaction when a referenced CHK resource changes:
+          #   none      — do nothing (default, backward-compatible)
+          #   reconcile — trigger CHI reconcile
+          # onKeeperResourceUpdate: none
+
     ################################################
     ##
     ## Annotations management section
@@ -5535,7 +5774,7 @@ metadata:
   name: etc-clickhouse-operator-confd-files
   namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
     app: clickhouse-operator
 data:
 ---
@@ -5551,7 +5790,7 @@ metadata:
   name: etc-clickhouse-operator-configd-files
   namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
     app: clickhouse-operator
 data:
   01-clickhouse-01-listen.xml: |
@@ -5645,7 +5884,7 @@ metadata:
   name: etc-clickhouse-operator-templatesd-files
   namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
     app: clickhouse-operator
 data:
   001-templates.json.example: |
@@ -5743,7 +5982,7 @@ metadata:
   name: etc-clickhouse-operator-usersd-files
   namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
     app: clickhouse-operator
 data:
   01-clickhouse-operator-profile.xml: |
@@ -5805,7 +6044,7 @@ metadata:
   name: etc-keeper-operator-confd-files
   namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
     app: clickhouse-operator
 data:
 ---
@@ -5821,7 +6060,7 @@ metadata:
   name: etc-keeper-operator-configd-files
   namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
     app: clickhouse-operator
 data:
   01-keeper-01-default-config.xml: |
@@ -5899,7 +6138,7 @@ metadata:
   name: etc-keeper-operator-templatesd-files
   namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
     app: clickhouse-operator
 data:
   readme: |
@@ -5917,7 +6156,7 @@ metadata:
   name: etc-keeper-operator-usersd-files
   namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
     app: clickhouse-operator
 data:
 ---
@@ -5925,7 +6164,7 @@ data:
 # Template parameters available:
 #   NAMESPACE=kube-system
 #   COMMENT=
-#   OPERATOR_VERSION=0.26.3
+#   OPERATOR_VERSION=0.27.0
 #   CH_USERNAME_SECRET_PLAIN=clickhouse_operator
 #   CH_PASSWORD_SECRET_PLAIN=clickhouse_operator_password
 #
@@ -5935,7 +6174,7 @@ metadata:
   name: clickhouse-operator
   namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
     app: clickhouse-operator
 type: Opaque
 stringData:
@@ -5946,9 +6185,9 @@ stringData:
 #
 # NAMESPACE=kube-system
 # COMMENT=
-# OPERATOR_IMAGE=altinity/clickhouse-operator:0.26.3
+# OPERATOR_IMAGE=altinity/clickhouse-operator:0.27.0
 # OPERATOR_IMAGE_PULL_POLICY=Always
-# METRICS_EXPORTER_IMAGE=altinity/metrics-exporter:0.26.3
+# METRICS_EXPORTER_IMAGE=altinity/metrics-exporter:0.27.0
 # METRICS_EXPORTER_IMAGE_PULL_POLICY=Always
 #
 # Setup Deployment for clickhouse-operator
@@ -5959,7 +6198,7 @@ metadata:
   name: clickhouse-operator
   namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
     app: clickhouse-operator
 spec:
   replicas: 1
@@ -6007,7 +6246,7 @@ spec:
             name: etc-keeper-operator-usersd-files
       containers:
         - name: clickhouse-operator
-          image: altinity/clickhouse-operator:0.26.3
+          image: altinity/clickhouse-operator:0.27.0
           imagePullPolicy: Always
           volumeMounts:
             - name: etc-clickhouse-operator-folder
@@ -6081,7 +6320,7 @@ spec:
             - containerPort: 9999
               name: op-metrics
         - name: metrics-exporter
-          image: altinity/metrics-exporter:0.26.3
+          image: altinity/metrics-exporter:0.27.0
           imagePullPolicy: Always
           volumeMounts:
             - name: etc-clickhouse-operator-folder
@@ -6171,7 +6410,7 @@ metadata:
   name: clickhouse-operator-metrics
   namespace: kube-system
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
     app: clickhouse-operator
 spec:
   ports:
