@@ -56,7 +56,7 @@ func initClickHouse(ctx context.Context) {
 	}
 
 	// Initialize k8s API clients
-	kubeClient, extClient, chopClient := chop.GetClientset(kubeConfigFile, masterURL)
+	kubeClient, extClient, chopClient, dynamicClient := chop.GetClientset(kubeConfigFile, masterURL)
 
 	// Create operator instance
 	chop.New(kubeClient, chopClient, chopConfigFile)
@@ -87,9 +87,13 @@ func initClickHouse(ctx context.Context) {
 		chopClient,
 		extClient,
 		kubeClient,
+		dynamicClient,
 		chopInformerFactory,
 		kubeInformerFactory,
 	)
+
+	// Start CHK watcher (if enabled by config)
+	chiController.StartCHKWatcher(ctx)
 
 	// Start Informers
 	kubeInformerFactory.Start(ctx.Done())
