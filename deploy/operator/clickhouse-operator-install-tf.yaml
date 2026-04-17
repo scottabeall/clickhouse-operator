@@ -838,7 +838,9 @@ spec:
                                   service — use the CR-level headless service as a single ZK node entry
                               enum:
                                 - ""
+                                - "Replicas"
                                 - "replicas"
+                                - "Service"
                                 - "service"
                         session_timeout_ms:
                           type: integer
@@ -2446,7 +2448,9 @@ spec:
                                   service — use the CR-level headless service as a single ZK node entry
                               enum:
                                 - ""
+                                - "Replicas"
                                 - "replicas"
+                                - "Service"
                                 - "service"
                         session_timeout_ms:
                           type: integer
@@ -3732,7 +3736,9 @@ spec:
                                   reconcile — trigger CHI reconcile
                               enum:
                                 - ""
+                                - "None"
                                 - "none"
+                                - "Reconcile"
                                 - "reconcile"
                 annotation:
                   type: object
