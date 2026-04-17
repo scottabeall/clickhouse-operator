@@ -7,7 +7,7 @@ spec:
     clusters:
       - name: keeper
         layout:
-          replicasCount: 1
+          replicasCount: 3
   templates:
     podTemplates:
       - name: default
