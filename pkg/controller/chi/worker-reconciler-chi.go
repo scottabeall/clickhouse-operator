@@ -137,7 +137,9 @@ func (w *worker) reconcileCR(ctx context.Context, old, new *api.ClickHouseInstal
 func (w *worker) buildCR(ctx context.Context, _cr *api.ClickHouseInstallation) *api.ClickHouseInstallation {
 	// Resolve all keeper references before normalization — populates ZookeeperConfig.Nodes from KeeperRef
 	if err := w.resolveAllKeeperReferences(ctx, _cr); err != nil {
-		w.a.M(_cr).F().Warning("Failed to resolve keeper references: %v", err)
+		w.a.V(1).M(_cr).F().
+			WithEvent(_cr, a.EventActionReconcile, a.EventReasonReconcileFailed).
+			Warning("Failed to resolve keeper references: %v", err)
 	}
 
 	cr := w.createTemplatedCR(_cr)
