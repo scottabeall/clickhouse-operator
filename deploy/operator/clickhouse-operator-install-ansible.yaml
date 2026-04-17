@@ -5080,6 +5080,10 @@ data:
       # Regexp is applicable.
       namespaces: [{{ namespace }}]
     
+    # Restart operator when ClickHouseOperatorConfiguration changes.
+    restart:
+      onOperatorConfigurationChange: true
+    
     clickhouse:
       configuration:
         ################################################

@@ -5073,6 +5073,10 @@ data:
       # Regexp is applicable.
       namespaces: []
     
+    # Restart operator when ClickHouseOperatorConfiguration changes.
+    restart:
+      onOperatorConfigurationChange: true
+    
     clickhouse:
       configuration:
         ################################################

@@ -3250,6 +3250,13 @@ spec:
                   type: object
                   description: "List of namespaces where clickhouse-operator watches for events."
                   x-kubernetes-preserve-unknown-fields: true
+            restart:
+              type: object
+              description: "Parameters which control operator restart behavior"
+              properties:
+                onOperatorConfigurationChange:
+                  type: boolean
+                  description: "Restart operator when ClickHouseOperatorConfiguration changes"
             clickhouse:
               type: object
               description: "Clickhouse related parameters used by clickhouse-operator"
@@ -4722,7 +4729,6 @@ metadata:
   namespace: kube-system
   labels:
     clickhouse.altinity.com/chop: 0.27.0
-
 # Template Parameters:
 #
 # NAMESPACE=kube-system
@@ -4975,7 +4981,6 @@ subjects:
   - kind: ServiceAccount
     name: clickhouse-operator
     namespace: kube-system
-
 # Template Parameters:
 #
 # NAMESPACE=kube-system
@@ -5271,6 +5276,10 @@ data:
       # IMPORTANT
       # Regexp is applicable.
       namespaces: []
+
+    # Restart operator when ClickHouseOperatorConfiguration changes.
+    restart:
+      onOperatorConfigurationChange: true
 
     clickhouse:
       configuration:
