@@ -81,6 +81,11 @@ func initClickHouse(ctx context.Context) {
 		chopInformerFactoryResyncPeriod,
 		chopinformers.WithNamespace(chop.Config().GetInformerNamespace()),
 	)
+	chopConfigInformerFactory := chopinformers.NewSharedInformerFactoryWithOptions(
+		chopClient,
+		chopInformerFactoryResyncPeriod,
+		chopinformers.WithNamespace(chop.Config().Runtime.Namespace),
+	)
 
 	// Create Controller
 	chiController = chi.NewController(
@@ -88,6 +93,7 @@ func initClickHouse(ctx context.Context) {
 		extClient,
 		kubeClient,
 		dynamicClient,
+		chopConfigInformerFactory,
 		chopInformerFactory,
 		kubeInformerFactory,
 	)
@@ -98,6 +104,7 @@ func initClickHouse(ctx context.Context) {
 	// Start Informers
 	kubeInformerFactory.Start(ctx.Done())
 	chopInformerFactory.Start(ctx.Done())
+	chopConfigInformerFactory.Start(ctx.Done())
 }
 
 // runClickHouse is an entry point of the application
