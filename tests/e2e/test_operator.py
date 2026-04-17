@@ -5757,6 +5757,81 @@ def test_010063(self):
         delete_test_namespace()
 
 
+@TestScenario
+@Name("test_010064. Test CHK watch triggers CHI reconcile on keeper resource update")
+@Requirements(RQ_SRS_026_ClickHouseOperator_Create("1.0"))
+def test_010064(self):
+    """Verify that when onKeeperResourceUpdate=reconcile is configured,
+    the operator auto-reconciles dependent CHIs when a referenced CHK completes reconcile."""
+    create_shell_namespace_clickhouse_template()
+
+    chk_manifest = "manifests/chk/test-063-keeper-ref-chk.yaml"
+    chi_manifest = "manifests/chi/test-063-keeper-ref.yaml"
+    chopconf_manifest = "manifests/chopconf/test-063-keeper-watch.yaml"
+    chk = "test-063-chk"
+    chi = "test-063-keeper-ref"
+
+    with Given("Operator configuration enables keeper watch"):
+        kubectl.apply(
+            util.get_full_path(chopconf_manifest, lookup_in_host=False),
+            current().context.operator_namespace,
+        )
+        util.restart_operator(ns=current().context.operator_namespace)
+
+    with And("CHK is installed and ready"):
+        kubectl.create_and_check(
+            manifest=chk_manifest,
+            kind="chk",
+            check={
+                "do_not_delete": 1,
+            },
+        )
+
+    with And("CHI referencing CHK by name is installed"):
+        kubectl.create_and_check(
+            manifest=chi_manifest,
+            check={
+                "apply_templates": {current().context.clickhouse_template},
+                "object_counts": {"statefulset": 2, "pod": 2, "service": 3},
+                "do_not_delete": 1,
+            },
+        )
+
+    with When("Trigger CHK reconcile by patching taskID"):
+        operator_pod = kubectl.get_operator_pod(ns=current().context.test_namespace)
+        kubectl.launch(
+            f"patch chk {chk} --type='json' --patch='[{{\"op\":\"add\",\"path\":\"/spec/taskID\",\"value\":\"keeper-watch-test\"}}]'",
+        )
+
+    with Then("While CHK is InProgress, CHI reconcile should NOT be triggered"):
+        time.sleep(5)
+        chk_status = kubectl.get_field("chk", chk, ".status.status")
+        if chk_status != "Completed":
+            logs_during = kubectl.launch(
+                f"logs {operator_pod} -c clickhouse-operator --since=30s",
+                ns=current().context.test_namespace,
+            )
+            assert "Triggering reconcile for CHI" not in logs_during, \
+                error("CHI reconcile was triggered before CHK reached Completed")
+
+    with When("Wait for CHK to reach Completed"):
+        kubectl.wait_field("chk", chk, ".status.status", "Completed", retries=30)
+
+    with Then("After CHK completes, operator logs should show CHK watch triggered CHI reconcile"):
+        time.sleep(15)
+        logs_after = kubectl.launch(
+            f"logs {operator_pod} -c clickhouse-operator",
+            ns=current().context.test_namespace,
+        )
+        assert "Triggering reconcile for CHI" in logs_after and chi in logs_after, \
+            error(f"Expected keeper watch trigger in operator logs for CHI {chi}")
+
+    kubectl.delete_chi(chi)
+
+    with Finally("I clean up"):
+        delete_test_namespace()
+
+
 #
 # Keeper tests section
 #
