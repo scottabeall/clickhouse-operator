@@ -27,6 +27,10 @@ watch:
     include: [dev, test]
     exclude: []
 
+# Restart operator when ClickHouseOperatorConfiguration changes.
+restart:
+  onOperatorConfigurationChange: true
+
 clickhouse:
   configuration:
     ################################################

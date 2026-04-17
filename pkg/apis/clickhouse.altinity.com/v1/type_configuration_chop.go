@@ -733,6 +733,10 @@ type OperatorConfigStatusFields struct {
 	Errors  *types.StringBool `json:"errors,omitempty"  yaml:"errors,omitempty"`
 }
 
+type OperatorConfigRestart struct {
+	OnOperatorConfigurationChange bool `json:"onOperatorConfigurationChange" yaml:"onOperatorConfigurationChange"`
+}
+
 type ConfigCRSource struct {
 	Namespace string
 	Name      string
@@ -750,6 +754,7 @@ type OperatorConfig struct {
 	Label       OperatorConfigLabel      `json:"label"      yaml:"label"`
 	Metrics     OperatorConfigMetrics    `json:"metrics"    yaml:"metrics"`
 	Status      OperatorConfigStatus     `json:"status"     yaml:"status"`
+	Restart     OperatorConfigRestart    `json:"restart"    yaml:"restart"`
 	StatefulSet struct {
 		// Revision history limit
 		RevisionHistoryLimit int `json:"revisionHistoryLimit" yaml:"revisionHistoryLimit"`

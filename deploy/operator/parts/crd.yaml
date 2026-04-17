@@ -8224,6 +8224,13 @@ spec:
                       type: object
                       description: "List of namespaces where clickhouse-operator watches for events."
                       x-kubernetes-preserve-unknown-fields: true
+                restart:
+                  type: object
+                  description: "Parameters which control operator restart behavior"
+                  properties:
+                    onOperatorConfigurationChange:
+                      type: boolean
+                      description: "Restart operator when ClickHouseOperatorConfiguration changes"
                 clickhouse:
                   type: object
                   description: "Clickhouse related parameters used by clickhouse-operator"
