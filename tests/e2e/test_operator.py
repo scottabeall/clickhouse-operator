@@ -5699,6 +5699,7 @@ def test_010063(self):
     create_shell_namespace_clickhouse_template()
 
     chk_manifest = "manifests/chk/test-063-keeper-ref-chk.yaml"
+    chk_manifest_2 = "manifests/chk/test-063-keeper-ref-chk-2.yaml"
     chi_manifest = "manifests/chi/test-063-keeper-ref.yaml"
     chk = "test-063-chk"
     chi = "test-063-keeper-ref"
@@ -5709,6 +5710,7 @@ def test_010063(self):
             kind="chk",
             check={
                 "do_not_delete": 1,
+                "pod_count": 1,
             },
         )
 
@@ -5723,13 +5725,31 @@ def test_010063(self):
         )
 
     with Then("ClickHouse can access ZooKeeper via resolved keeper reference"):
-        out = clickhouse.query(chi, "SELECT count() FROM system.zookeeper WHERE path = '/'")
-        assert int(out.strip()) > 0, error("ClickHouse should be able to query ZooKeeper")
+        out = clickhouse.query(chi, "SELECT path FROM system.zookeeper WHERE path = '/' limit 1")
+        assert out == '/', error("ClickHouse should be able to query ZooKeeper")
 
     with And("ZooKeeper is accessible from all replicas"):
         for pod_name in kubectl.get_pod_names(chi):
-            out = clickhouse.query(chi, "SELECT count() FROM system.zookeeper WHERE path = '/'", pod=pod_name)
-            assert int(out.strip()) > 0, error(f"ZooKeeper should be accessible from {pod_name}")
+            out = clickhouse.query(chi, "SELECT path FROM system.zookeeper WHERE path = '/' limit 1", pod=pod_name)
+            assert out == '/', error(f"ZooKeeper should be accessible from {pod_name}")
+
+    with When("Rescale Keeper to 3 nodes"):
+        kubectl.create_and_check(
+            manifest=chk_manifest_2,
+            kind="chk",
+            check={
+                "do_not_delete": 1,
+                "pod_count": 3,
+            },
+        )
+        with Then("Push CHI reconcile"):
+            kubectl.force_chi_reconcile(chi, "reconcile")
+
+        with Then("CHI should be reconfigured for 3 node ZooKeeper"):
+            zookeeper_config = kubectl.get("configmap", f"chi-{chi}-deploy-confd-default-0-0")["data"]["chop-generated-zookeeper.xml"]
+            # print(zookeeper_config)
+            node_count = zookeeper_config.count("<node>")
+            assert node_count == 3, error("ZooKeeper configuration should contain 3 nodes now")
 
     kubectl.delete_chi(chi)
 
