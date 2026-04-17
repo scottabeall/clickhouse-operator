@@ -128,8 +128,8 @@ func (w *worker) resolveKeeperReference(ctx context.Context, chiNamespace string
 		return fmt.Errorf("%w %s/%s", ErrKeeperRefNoNodes, ns, name)
 	}
 
-	// Looks good, append service or nodes to the CHI's ZookeeperConfig
-	log.V(1).Info("Resolved keeper ref %s/%s to %d node(s)", ns, name, len(nodes))
+	// Looks good, append resolved nodes to the CHI's ZookeeperConfig
+	log.V(1).Info("Resolved keeper ref %s/%s to %d node(s): %s", ns, name, len(nodes), nodes)
 	zkc.Nodes = zkc.Nodes.Append(nodes...)
 	return nil
 }
@@ -168,7 +168,7 @@ func (w *worker) waitKeeperReady(ctx context.Context, namespace, name string) er
 	timeout := time.Duration(chop.Config().Reconcile.Coordination.Keeper.ReadyTimeout) * time.Second
 
 	pollerName := fmt.Sprintf("keeper-ready/%s/%s", namespace, name)
-	return poller.New(ctx, pollerName).
+	if err := poller.New(ctx, pollerName).
 		WithOptions(&poller.Options{
 			Timeout:                    timeout,
 			MainInterval:               keeperReadyPollInterval,
@@ -194,7 +194,10 @@ func (w *worker) waitKeeperReady(ctx context.Context, namespace, name string) er
 				return true
 			},
 		}).
-		Poll()
+		Poll(); err != nil {
+		return fmt.Errorf("%w %s/%s: %w", ErrKeeperNotReady, namespace, name, err)
+	}
+	return nil
 }
 
 // resolveKeeperByService resolves using the CR-level service (single endpoint).

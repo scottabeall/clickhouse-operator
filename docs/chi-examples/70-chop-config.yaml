@@ -194,6 +194,21 @@ spec:
           # Default option value is to wait.
           readiness: "yes"
 
+    ################################################
+    ##
+    ## Coordination with external systems during reconcile
+    ##
+    ################################################
+    coordination:
+      keeper:
+        # How long the operator waits for a referenced ClickHouseKeeper to become ready
+        # before aborting CHI reconcile. In seconds.
+        readyTimeout: 120
+        # Reaction when a referenced CHK resource changes:
+        #   none (default) — do nothing
+        #   reconcile — trigger CHI reconcile
+        onKeeperResourceUpdate: none
+
   ################################################
   ##
   ## Annotations management
