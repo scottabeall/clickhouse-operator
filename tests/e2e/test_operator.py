@@ -303,6 +303,57 @@ def check_operator_restart(chi, wait_objects, pod, shell=None):
             assert start_time == new_start_time
 
 
+def _operator_pod_container_restart_total(pod_name, ns=None, shell=None, ok_to_fail=False):
+    """Sum of .status.containerStatuses[*].restartCount (detect in-place container restarts)."""
+    if not pod_name:
+        return 0
+    pod = kubectl.get("pod", pod_name, ns=ns, ok_to_fail=ok_to_fail, shell=shell)
+    if not pod:
+        return 0
+    statuses = (pod.get("status") or {}).get("containerStatuses") or []
+    return sum(int(cs.get("restartCount") or 0) for cs in statuses)
+
+
+def wait_for_operator_pod_restart(old_pod_name, ns=None, timeout=180, shell=None):
+    if ns is None:
+        ns = current().context.operator_namespace
+
+    initial_restart_total = _operator_pod_container_restart_total(
+        old_pod_name, ns=ns, shell=shell, ok_to_fail=False
+    )
+
+    with Then("Operator pod should be restarted automatically (new pod or container restart)"):
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            new_pod_name = kubectl.get_operator_pod(ns=ns, shell=shell)
+            if not new_pod_name:
+                time.sleep(1)
+                continue
+
+            if new_pod_name != old_pod_name:
+                kubectl.wait_pod_status(new_pod_name, "Running", ns=ns, shell=shell)
+                print(f"old operator pod: {old_pod_name}")
+                print(f"new operator pod: {new_pod_name}")
+                return new_pod_name
+
+            current_restart_total = _operator_pod_container_restart_total(
+                new_pod_name, ns=ns, shell=shell, ok_to_fail=True
+            )
+            if current_restart_total > initial_restart_total:
+                kubectl.wait_pod_status(new_pod_name, "Running", ns=ns, shell=shell)
+                print(f"operator pod (unchanged name): {new_pod_name}")
+                print(
+                    f"container restart total: {initial_restart_total} -> {current_restart_total}"
+                )
+                return new_pod_name
+
+            time.sleep(1)
+
+        assert False, error(
+            f"operator was not restarted (no new pod, no container restart) within {timeout} seconds"
+        )
+
+
 @TestCheck
 def test_operator_restart(self, manifest, service, version=None):
     if version is None:
@@ -3636,6 +3687,34 @@ def test_010032(self):
     # with Then("I recreate shell"):
     #    shell = get_shell()
     #    self.context.shell = shell
+
+    with Finally("I clean up"):
+        delete_test_namespace()
+
+
+@TestScenario
+@Requirements(RQ_SRS_026_ClickHouseOperator_Settings_ClickHouseOperatorConfiguration_Changes("1.0"))
+@Name("test_010033. Restart operator automatically on ClickHouseOperatorConfiguration change")
+def test_010033(self):
+    create_shell_namespace_clickhouse_template()
+
+    chopconf_file = "manifests/chopconf/test-033-auto-restart.yaml"
+    operator_namespace = current().context.operator_namespace
+
+    with Given(f"operator pod before applying {chopconf_file}"):
+        operator_pod = kubectl.get_operator_pod(ns=operator_namespace)
+
+    with When("Apply ClickHouseOperatorConfiguration"):
+        kubectl.apply(util.get_full_path(chopconf_file, lookup_in_host=False), operator_namespace)
+
+        with Then("Operator should restart automatically after configuration is applied"):
+            operator_pod = wait_for_operator_pod_restart(operator_pod, ns=operator_namespace)
+
+    with Then("Deleting ClickHouseOperatorConfiguration"):
+        kubectl.delete(util.get_full_path(chopconf_file, lookup_in_host=False), operator_namespace)
+
+        with Then("Operator should restart back after cleanup"):
+            wait_for_operator_pod_restart(operator_pod, ns=operator_namespace)
 
     with Finally("I clean up"):
         delete_test_namespace()
