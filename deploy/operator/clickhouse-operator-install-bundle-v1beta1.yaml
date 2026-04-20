@@ -3250,13 +3250,16 @@ spec:
                   type: object
                   description: "List of namespaces where clickhouse-operator watches for events."
                   x-kubernetes-preserve-unknown-fields: true
-            restart:
-              type: object
-              description: "Parameters which control operator restart behavior"
-              properties:
-                onOperatorConfigurationChange:
-                  type: boolean
-                  description: "Restart operator when ClickHouseOperatorConfiguration changes"
+                configuration:
+                  type: object
+                  description: "Behavior when ClickHouseOperatorConfiguration resources change"
+                  properties:
+                    onChange:
+                      type: string
+                      enum:
+                        - none
+                        - restart
+                      description: "none — ignore; restart — exit process so the operator pod restarts"
             clickhouse:
               type: object
               description: "Clickhouse related parameters used by clickhouse-operator"
@@ -5277,9 +5280,9 @@ data:
       # Regexp is applicable.
       namespaces: []
 
-    # Restart operator when ClickHouseOperatorConfiguration changes.
-    restart:
-      onOperatorConfigurationChange: true
+      # Behavior when ClickHouseOperatorConfiguration changes: none | restart
+      configuration:
+        onChange: restart
 
     clickhouse:
       configuration:

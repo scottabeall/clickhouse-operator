@@ -25,9 +25,9 @@ watch:
   # Regexp is applicable.
   namespaces: []
 
-# Restart operator when ClickHouseOperatorConfiguration changes.
-restart:
-  onOperatorConfigurationChange: true
+  # Behavior when ClickHouseOperatorConfiguration changes: none | restart
+  configuration:
+    onChange: restart
 
 clickhouse:
   configuration:

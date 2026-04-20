@@ -62,7 +62,7 @@ func initClickHouse(ctx context.Context) {
 	chop.New(kubeClient, chopClient, chopConfigFile)
 	log.V(1).F().Info("Config parsed:")
 	log.Info("\n" + chop.Config().String(true))
-	if chop.Config().Restart.OnOperatorConfigurationChange {
+	if chop.Config().RestartOnOperatorConfigurationChange() {
 		log.Info("Auto-restart on ClickHouseOperatorConfiguration change is enabled")
 	} else {
 		log.Info("Auto-restart on ClickHouseOperatorConfiguration change is disabled")

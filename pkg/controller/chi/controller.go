@@ -782,7 +782,7 @@ func (c *Controller) deleteChopConfig(chopConfig *api.ClickHouseOperatorConfigur
 }
 
 func (c *Controller) restartOperatorOnConfigChange(reason string) {
-	if !chop.Config().Restart.OnOperatorConfigurationChange {
+	if !chop.Config().RestartOnOperatorConfigurationChange() {
 		log.V(1).Info("Operator restart on configuration change is disabled")
 		return
 	}
