@@ -569,7 +569,16 @@
                                     "type": "object",
                                     "properties": {
                                         "namespaces": {
-                                            "type": "array"
+                                            "type": ["array", "object"]
+                                        },
+                                        "configuration": {
+                                            "type": "object",
+                                            "properties": {
+                                                "onChange": {
+                                                    "type": "string",
+                                                    "enum": ["none", "restart"]
+                                                }
+                                            }
                                         }
                                     }
                                 }
