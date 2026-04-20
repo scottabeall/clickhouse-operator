@@ -90,6 +90,7 @@ func NewController(
 	extClient apiExtensions.Interface,
 	kubeClient kube.Interface,
 	dynamicClient dynamic.Interface,
+	chopConfigInformerFactory chopInformers.SharedInformerFactory,
 	chopInformerFactory chopInformers.SharedInformerFactory,
 	kubeInformerFactory kubeInformers.SharedInformerFactory,
 ) *Controller {
@@ -128,7 +129,7 @@ func NewController(
 		pvcDeleter:    volume.NewPVCDeleter(managers.NewNameManager(managers.NameManagerTypeClickHouse)),
 	}
 	controller.initQueues()
-	controller.addEventHandlers(chopInformerFactory, kubeInformerFactory)
+	controller.addEventHandlers(chopConfigInformerFactory, chopInformerFactory, kubeInformerFactory)
 
 	return controller
 }
@@ -218,32 +219,22 @@ func (c *Controller) addEventHandlersCHIT(
 }
 
 func (c *Controller) addEventHandlersChopConfig(
-	chopInformerFactory chopInformers.SharedInformerFactory,
+	chopConfigInformerFactory chopInformers.SharedInformerFactory,
 ) {
-	chopInformerFactory.Clickhouse().V1().ClickHouseOperatorConfigurations().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	chopConfigInformerFactory.Clickhouse().V1().ClickHouseOperatorConfigurations().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			chopConfig := obj.(*api.ClickHouseOperatorConfiguration)
-			if !chop.Config().IsNamespaceWatched(chopConfig.Namespace) {
-				log.V(2).M(chopConfig).Info("chopInformer: skip event, namespace '%s' is not watched or is in deny list", chopConfig.Namespace)
-				return
-			}
 			log.V(3).M(chopConfig).Info("chopInformer.AddFunc")
 			c.enqueueObject(cmd_queue.NewReconcileChopConfig(cmd_queue.ReconcileAdd, nil, chopConfig))
 		},
 		UpdateFunc: func(old, new interface{}) {
 			newChopConfig := new.(*api.ClickHouseOperatorConfiguration)
 			oldChopConfig := old.(*api.ClickHouseOperatorConfiguration)
-			if !chop.Config().IsNamespaceWatched(newChopConfig.Namespace) {
-				return
-			}
 			log.V(3).M(newChopConfig).Info("chopInformer.UpdateFunc")
 			c.enqueueObject(cmd_queue.NewReconcileChopConfig(cmd_queue.ReconcileUpdate, oldChopConfig, newChopConfig))
 		},
 		DeleteFunc: func(obj interface{}) {
 			chopConfig := obj.(*api.ClickHouseOperatorConfiguration)
-			if !chop.Config().IsNamespaceWatched(chopConfig.Namespace) {
-				return
-			}
 			log.V(3).M(chopConfig).Info("chopInformer.DeleteFunc")
 			c.enqueueObject(cmd_queue.NewReconcileChopConfig(cmd_queue.ReconcileDelete, chopConfig, nil))
 		},
@@ -537,12 +528,13 @@ func (c *Controller) addEventHandlersPod(
 
 // addEventHandlers
 func (c *Controller) addEventHandlers(
+	chopConfigInformerFactory chopInformers.SharedInformerFactory,
 	chopInformerFactory chopInformers.SharedInformerFactory,
 	kubeInformerFactory kubeInformers.SharedInformerFactory,
 ) {
+	c.addEventHandlersChopConfig(chopConfigInformerFactory)
 	c.addEventHandlersCHI(chopInformerFactory)
 	c.addEventHandlersCHIT(chopInformerFactory)
-	c.addEventHandlersChopConfig(chopInformerFactory)
 	c.addEventHandlersService(kubeInformerFactory)
 	//c.addEventHandlersEndpoints(kubeInformerFactory)
 	c.addEventHandlersEndpointSlice(kubeInformerFactory)
