@@ -411,6 +411,13 @@ spec:
           podTemplate: clickhouse-v23.8
           dataVolumeClaimTemplate: default-volume-claim
           logVolumeClaimTemplate: default-volume-claim
+        # Cluster-level keeper reference overrides top-level zookeeper config for this cluster.
+        # If a cluster has its own zookeeper config, the top-level config is ignored for this cluster.
+        zookeeper:
+          keeper:
+            name: cluster-specific-keeper
+            namespace: keeper-namespace
+            serviceType: service
         layout:
           shardsCount: 3
           # replicasCount not specified, assumed = 1, by default
