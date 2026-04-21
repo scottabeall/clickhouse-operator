@@ -3258,8 +3258,12 @@ spec:
                       type: string
                       enum:
                         - none
+                        - None
+                        - ignore
+                        - Ignore
                         - restart
-                      description: "none — ignore; restart — exit process so the operator pod restarts"
+                        - Restart
+                      description: "none/ignore — do nothing; restart — exit process so the operator pod restarts"
             clickhouse:
               type: object
               description: "Clickhouse related parameters used by clickhouse-operator"
@@ -4732,6 +4736,7 @@ metadata:
   namespace: kube-system
   labels:
     clickhouse.altinity.com/chop: 0.27.0
+
 # Template Parameters:
 #
 # NAMESPACE=kube-system
@@ -4984,6 +4989,7 @@ subjects:
   - kind: ServiceAccount
     name: clickhouse-operator
     namespace: kube-system
+
 # Template Parameters:
 #
 # NAMESPACE=kube-system

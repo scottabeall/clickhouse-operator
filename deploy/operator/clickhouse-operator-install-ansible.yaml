@@ -3291,8 +3291,12 @@ spec:
                           type: string
                           enum:
                             - none
+                            - None
+                            - ignore
+                            - Ignore
                             - restart
-                          description: "none — ignore; restart — exit process so the operator pod restarts"
+                            - Restart
+                          description: "none/ignore — do nothing; restart — exit process so the operator pod restarts"
                 clickhouse:
                   type: object
                   description: "Clickhouse related parameters used by clickhouse-operator"
@@ -5082,7 +5086,7 @@ data:
       # IMPORTANT
       # Regexp is applicable.
       namespaces: [{{ namespace }}]
-
+    
       # Behavior when ClickHouseOperatorConfiguration changes: none | restart
       configuration:
         onChange: restart

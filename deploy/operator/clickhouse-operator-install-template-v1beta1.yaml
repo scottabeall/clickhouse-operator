@@ -3258,8 +3258,12 @@ spec:
                       type: string
                       enum:
                         - none
+                        - None
+                        - ignore
+                        - Ignore
                         - restart
-                      description: "none — ignore; restart — exit process so the operator pod restarts"
+                        - Restart
+                      description: "none/ignore — do nothing; restart — exit process so the operator pod restarts"
             clickhouse:
               type: object
               description: "Clickhouse related parameters used by clickhouse-operator"
@@ -4732,6 +4736,7 @@ metadata:
   namespace: ${OPERATOR_NAMESPACE}
   labels:
     clickhouse.altinity.com/chop: 0.27.0
+
 # Template Parameters:
 #
 # NAMESPACE=${OPERATOR_NAMESPACE}
