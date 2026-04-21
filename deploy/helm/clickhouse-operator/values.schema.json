@@ -576,7 +576,7 @@
                                             "properties": {
                                                 "onChange": {
                                                     "type": "string",
-                                                    "enum": ["none", "restart"]
+                                                    "enum": ["none", "None", "ignore", "Ignore", "restart", "Restart"]
                                                 }
                                             }
                                         }
