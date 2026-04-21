@@ -773,7 +773,7 @@ func (c *Controller) updateChopConfig(old, new *api.ClickHouseOperatorConfigurat
 	return nil
 }
 
-// deleteChit deletes CHIT
+// deleteChopConfig deletes CHOPCONF
 func (c *Controller) deleteChopConfig(chopConfig *api.ClickHouseOperatorConfiguration) error {
 	log.V(2).M(chopConfig).F().P()
 	c.restartOperatorOnConfigChange("ClickHouseOperatorConfiguration deleted")
