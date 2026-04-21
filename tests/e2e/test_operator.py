@@ -4,6 +4,8 @@ import yaml
 import threading
 import re
 
+from e2e.retry_sleep import retry_sleep
+
 import e2e.yaml_manifest as yaml_manifest
 import xml.etree.ElementTree as etree
 import e2e.clickhouse as clickhouse
@@ -1435,8 +1437,7 @@ def wait_for_cluster(chi, cluster, num_shards, num_replicas=0, pwd="", force_wai
                         )
                         if shards == str(num_shards):
                             break
-                        with Then("Not ready. Wait for " + str(i * 5) + " seconds"):
-                            time.sleep(i * 5)
+                        retry_sleep(i, 5, f"Not ready ({shards}/{num_shards})")
                     assert shards == str(num_shards)
 
         if num_replicas > 0:
@@ -1454,8 +1455,7 @@ def wait_for_cluster(chi, cluster, num_shards, num_replicas=0, pwd="", force_wai
                             )
                             if replicas == str(num_replicas):
                                 break
-                            with Then(f"Not ready. {replicas}/{num_replicas} replicas. Wait for " + str(i * 5) + " seconds"):
-                                time.sleep(i * 5)
+                            retry_sleep(i, 5, f"Not ready ({replicas}/{num_replicas})")
                         assert replicas == str(num_replicas)
             num_hosts = num_shards * num_replicas
             with By(f"ClickHouse recognizes {num_hosts} hosts in the cluster {cluster}"):
@@ -1473,9 +1473,8 @@ def wait_for_cluster(chi, cluster, num_shards, num_replicas=0, pwd="", force_wai
                             )
                             if hosts.startswith(str(num_hosts)):
                                 break
-                            with Then(f"{host} is not ready. Wait for " + str(i * 5) + " seconds"):
-                                print("Found: " + hosts)
-                                time.sleep(i * 5)
+                            print("Found: " + hosts)
+                            retry_sleep(i, 5, f"{host} is not ready")
                         assert hosts.startswith(str(num_hosts))
 
 
@@ -1960,8 +1959,7 @@ def check_host_network(manifest, replica1_port="9000", replica2_port="9000"):
                     sql=f"SELECT count() FROM remote('chi-{chi}-default-0-1:{replica2_port}', system.one)")
             if "DNS_ERROR" not in out:
                 break
-            print(f"DNS_ERROR. Wait for {i * 5} seconds")
-            time.sleep(i * 5)
+            retry_sleep(i, 5, "DNS_ERROR")
         print(f"out: {out}")
         assert out == "1"
 
@@ -4015,8 +4013,8 @@ def test_010036(self):
             for replica in (0,1):
                 with By(f"Check that databases exist on replica {replica}"):
                     # Schema propagation from ZooKeeper can take time after volume recovery,
-                    # especially under load. Retry for up to ~3 minutes.
-                    for i in range(1, 10):
+                    r = "0"
+                    for i in range(1, 15):
                         r = clickhouse.query(
                             chi,
                             pod=f"chi-test-036-volume-re-provisioning-simple-0-{replica}-0",
@@ -4024,8 +4022,7 @@ def test_010036(self):
                             )
                         if r == "2":
                             break
-                        with Then(f"Not ready yet ({r}/2). Wait for {i * 5} seconds"):
-                            time.sleep(i * 5)
+                        retry_sleep(i, 5, f"Not ready")
                     assert r == "2", error()
                 with And(f"checking data on the replica {replica}"):
                     r = clickhouse.query(
