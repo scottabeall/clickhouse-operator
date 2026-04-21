@@ -50,6 +50,13 @@ const (
 	// KeeperOnResourceUpdateReconcile means trigger CHI reconcile when referenced CHK changes.
 	KeeperOnResourceUpdateReconcile = "reconcile"
 
+	// OnConfigurationChangeNone means ignore ClickHouseOperatorConfiguration changes (default).
+	OnConfigurationChangeNone = "none"
+	// OnConfigurationChangeIgnore is an alias for OnConfigurationChangeNone.
+	OnConfigurationChangeIgnore = "ignore"
+	// OnConfigurationChangeRestart means exit the process so the pod restarts with the new config.
+	OnConfigurationChangeRestart = "restart"
+
 	// Default values for ClickHouse user configuration
 	// 1. user/profile
 	// 2. user/quota
@@ -204,8 +211,16 @@ type OperatorConfigWatch struct {
 
 // OperatorConfigWatchConfiguration specifies behavior when operator-wide configuration changes.
 type OperatorConfigWatchConfiguration struct {
-	// OnChange controls reaction to ClickHouseOperatorConfiguration changes: "none" or "restart".
-	OnChange string `json:"onChange,omitempty" yaml:"onChange,omitempty"`
+	// OnChange controls reaction to ClickHouseOperatorConfiguration changes:
+	//   nil / "none" / "ignore" (default) — do nothing
+	//   "restart"                         — exit process so the operator pod restarts
+	OnChange *types.String `json:"onChange,omitempty" yaml:"onChange,omitempty"`
+}
+
+// MergeFrom merges watch configuration settings, filling empty values.
+func (c OperatorConfigWatchConfiguration) MergeFrom(from OperatorConfigWatchConfiguration) OperatorConfigWatchConfiguration {
+	c.OnChange = c.OnChange.MergeFrom(from.OnChange)
+	return c
 }
 
 type OperatorConfigWatchNamespaces struct {
@@ -1419,7 +1434,7 @@ func (c *OperatorConfig) copyWithHiddenCredentials() *OperatorConfig {
 // RestartOnOperatorConfigurationChange reports whether the operator process should exit when
 // ClickHouseOperatorConfiguration changes (so the pod restarts).
 func (c *OperatorConfig) RestartOnOperatorConfigurationChange() bool {
-	return strings.ToLower(c.Watch.Configuration.OnChange) == "restart"
+	return strings.ToLower(c.Watch.Configuration.OnChange.String()) == OnConfigurationChangeRestart
 }
 
 // IsNamespaceWatched returns whether specified namespace is in a list of watched
