@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -751,10 +752,8 @@ func (c *Controller) addChopConfig(chopConfig *api.ClickHouseOperatorConfigurati
 	if chop.Get().ConfigManager.IsConfigListed(chopConfig) {
 		log.V(1).M(chopConfig).F().Info("already known config - do nothing")
 	} else {
-		log.V(1).M(chopConfig).F().Info("new, previously unknown config, need to apply")
-		// TODO
-		// NEED REFACTORING
-		// os.Exit(0)
+		log.V(1).M(chopConfig).F().Info("new, previously unknown config")
+		c.restartOperatorOnConfigChange("ClickHouseOperatorConfiguration added")
 	}
 
 	return nil
@@ -769,9 +768,7 @@ func (c *Controller) updateChopConfig(old, new *api.ClickHouseOperatorConfigurat
 	}
 
 	log.V(2).M(new).F().Info("ResourceVersion change: %s to %s", old.GetObjectMeta().GetResourceVersion(), new.GetObjectMeta().GetResourceVersion())
-	// TODO
-	// NEED REFACTORING
-	//os.Exit(0)
+	c.restartOperatorOnConfigChange("ClickHouseOperatorConfiguration updated")
 
 	return nil
 }
@@ -779,11 +776,19 @@ func (c *Controller) updateChopConfig(old, new *api.ClickHouseOperatorConfigurat
 // deleteChit deletes CHIT
 func (c *Controller) deleteChopConfig(chopConfig *api.ClickHouseOperatorConfiguration) error {
 	log.V(2).M(chopConfig).F().P()
-	// TODO
-	// NEED REFACTORING
-	//os.Exit(0)
+	c.restartOperatorOnConfigChange("ClickHouseOperatorConfiguration deleted")
 
 	return nil
+}
+
+func (c *Controller) restartOperatorOnConfigChange(reason string) {
+	if !chop.Config().RestartOnOperatorConfigurationChange() {
+		log.V(1).Info("Operator restart on configuration change is disabled")
+		return
+	}
+
+	log.Info("Operator restart requested: %s", reason)
+	os.Exit(0)
 }
 
 type patchFinalizers struct {

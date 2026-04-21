@@ -197,6 +197,15 @@ type OperatorConfigRuntime struct {
 type OperatorConfigWatch struct {
 	// Namespaces where operator watches for events
 	Namespaces OperatorConfigWatchNamespaces `json:"namespaces" yaml:"namespaces"`
+
+	// Configuration specifies behavior related to ClickHouseOperatorConfiguration watches
+	Configuration OperatorConfigWatchConfiguration `json:"configuration,omitempty" yaml:"configuration,omitempty"`
+}
+
+// OperatorConfigWatchConfiguration specifies behavior when operator-wide configuration changes.
+type OperatorConfigWatchConfiguration struct {
+	// OnChange controls reaction to ClickHouseOperatorConfiguration changes: "none" or "restart".
+	OnChange string `json:"onChange,omitempty" yaml:"onChange,omitempty"`
 }
 
 type OperatorConfigWatchNamespaces struct {
@@ -1405,6 +1414,12 @@ func (c *OperatorConfig) copyWithHiddenCredentials() *OperatorConfig {
 	conf.CHPassword = PasswordReplacer
 
 	return conf
+}
+
+// RestartOnOperatorConfigurationChange reports whether the operator process should exit when
+// ClickHouseOperatorConfiguration changes (so the pod restarts).
+func (c *OperatorConfig) RestartOnOperatorConfigurationChange() bool {
+	return strings.ToLower(c.Watch.Configuration.OnChange) == "restart"
 }
 
 // IsNamespaceWatched returns whether specified namespace is in a list of watched

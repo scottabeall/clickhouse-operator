@@ -25,6 +25,10 @@ watch:
   # Regexp is applicable.
   namespaces: []
 
+  # Behavior when ClickHouseOperatorConfiguration changes: none | restart
+  configuration:
+    onChange: restart
+
 clickhouse:
   configuration:
     ################################################

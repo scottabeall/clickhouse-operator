@@ -19,6 +19,10 @@ watch:
   # Regexp is applicable.
   namespaces: [${WATCH_NAMESPACES}]
 
+  # Behavior when ClickHouseOperatorConfiguration changes: none | restart
+  configuration:
+    onChange: restart
+
 clickhouse:
   configuration:
     ################################################
