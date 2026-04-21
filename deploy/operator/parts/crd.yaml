@@ -8224,6 +8224,16 @@ spec:
                       type: object
                       description: "List of namespaces where clickhouse-operator watches for events."
                       x-kubernetes-preserve-unknown-fields: true
+                    configuration:
+                      type: object
+                      description: "Behavior when ClickHouseOperatorConfiguration resources change"
+                      properties:
+                        onChange:
+                          type: string
+                          enum:
+                            - none
+                            - restart
+                          description: "none — ignore; restart — exit process so the operator pod restarts"
                 clickhouse:
                   type: object
                   description: "Clickhouse related parameters used by clickhouse-operator"
