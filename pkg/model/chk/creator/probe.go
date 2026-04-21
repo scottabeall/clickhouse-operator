@@ -50,7 +50,7 @@ func (m *ProbeManager) createDefaultStartupProbe(_ *api.Host) *core.Probe {
 	return &core.Probe{
 		ProbeHandler: core.ProbeHandler{
 			Exec: &core.ExecAction{
-				Command: []string{"pgrep", "-f","clickhouse-keeper"},
+				Command: []string{"pgrep", "-f", "clickhouse-keeper"},
 			},
 		},
 		InitialDelaySeconds: 1,
@@ -66,7 +66,7 @@ func (m *ProbeManager) createDefaultLivenessProbe(_ *api.Host) *core.Probe {
 	return &core.Probe{
 		ProbeHandler: core.ProbeHandler{
 			Exec: &core.ExecAction{
-				Command: []string{"pgrep", "-f","clickhouse-keeper"},
+				Command: []string{"pgrep", "-f", "clickhouse-keeper"},
 			},
 		},
 		InitialDelaySeconds: 5,
