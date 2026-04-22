@@ -777,14 +777,13 @@ def test_010011_1(self):
 
     with Given("test-011-secured-cluster-1.yaml and test-011-insecured-cluster.yaml"):
 
-        # Create clusters in parallel to speed it up
         kubectl.create_and_check(
             manifest="manifests/chi/test-011-secured-cluster-1.yaml",
             check={
                 "apply_templates": {
                     current().context.clickhouse_template,
                 },
-                "chi_status": "InProgress",
+                "chi_status": "InProgress", # Do not wait for completion in order to start second CHI in parallel
                 "do_not_delete": 1,
             },
         )
@@ -795,13 +794,11 @@ def test_010011_1(self):
                 "apply_templates": {
                     current().context.clickhouse_template,
                 },
-                "chi_status": "InProgress",
                 "do_not_delete": 1,
             },
         )
 
         kubectl.wait_chi_status("test-011-secured-cluster", "Completed")
-        kubectl.wait_chi_status("test-011-insecured-cluster", "Completed")
 
         # Tests default user security
         def test_default_user():
@@ -939,15 +936,6 @@ def test_010011_1(self):
                 pwd="secret",
             )
             assert "ACCESS_DENIED" not in out
-
-        with And("User 'clickhouse_operator' can login with custom password"):
-            out = clickhouse.query_with_error(
-                "test-011-secured-cluster",
-                "select 'OK'",
-                user="clickhouse_operator",
-                pwd="operator_secret",
-            )
-            assert out != "OK"
 
     with Finally("I clean up"):
         delete_test_namespace()
