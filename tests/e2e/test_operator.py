@@ -3721,6 +3721,114 @@ def test_010033(self):
 
 
 @TestScenario
+@Name("test_010035. Auto-recovery from aborted reconcile when pod becomes Ready")
+def test_010035(self):
+    """Verify that when a CHI reconcile is aborted because a pod did not become
+    Ready within `statefulSet.update.timeout`, the operator automatically re-enqueues the
+    CHI for reconcile once the pod eventually becomes Ready — no manual intervention
+    (taskID change, force reconcile, etc.) required.
+
+    Scenario:
+      1. Apply CHOPCONF with short update timeout (30s) and onFailure=abort
+      2. Apply CHI with a pod template that sleeps 90s before starting clickhouse
+      3. Reconcile aborts around 30s with Status=Aborted
+      4. Pod becomes Ready around 90s
+      5. Operator detects NotReady→Ready transition, auto-recovers reconcile
+      6. CHI reaches Status=Completed without any manual trigger
+    """
+    create_shell_namespace_clickhouse_template()
+
+    chopconf_file = "manifests/chopconf/test-035-auto-recovery-aborted.yaml"
+    operator_namespace = current().context.operator_namespace
+
+    util.apply_operator_config(chopconf_file)
+
+    manifest = "manifests/chi/test-035-auto-recovery-aborted.yaml"
+    chi = yaml_manifest.get_name(util.get_full_path(manifest))
+    cluster = "default"
+
+    try:
+        with When("I create CHI with slow-starting pod"):
+            kubectl.apply(util.get_full_path(manifest, lookup_in_host=False))
+
+            with Then("CHI should enter Aborted state after the update timeout"):
+                kubectl.wait_chi_status(chi, "Aborted", retries=20)
+
+            pod = f"chi-{chi}-{cluster}-0-0-0"
+            with And("Wait for the pod to eventually become Ready"):
+                kubectl.wait_field(
+                    "pod",
+                    pod,
+                    ".status.containerStatuses[0].ready",
+                    "true",
+                    retries=30,
+                )
+
+            with Then("Operator should automatically recover reconcile (no manual action)"):
+                kubectl.wait_chi_status(chi, "Completed", retries=20)
+
+    finally:
+        with Finally("I clean up"):
+            kubectl.delete(util.get_full_path(chopconf_file, lookup_in_host=False), operator_namespace, ok_to_fail=True)
+            delete_test_namespace()
+
+
+@TestScenario
+@Name("test_010035_1. Opt-out: CHI stays Aborted when auto-recovery onPodReady=none")
+def test_010035_1(self):
+    """Opt-out path: Verify that when the operator is configured with
+    reconcile.recovery.from.aborted.onPodReady=none, the CHI stays Aborted
+    even after the pod becomes Ready — no automatic recovery.
+
+    This is the inverse of test_010035 and validates that the opt-out knob works.
+    """
+    create_shell_namespace_clickhouse_template()
+
+    chopconf_file = "manifests/chopconf/test-035-1-auto-recovery-disabled.yaml"
+    operator_namespace = current().context.operator_namespace
+
+    util.apply_operator_config(chopconf_file)
+
+    manifest = "manifests/chi/test-035-1-auto-recovery-disabled.yaml"
+    chi = yaml_manifest.get_name(util.get_full_path(manifest))
+    cluster = "default"
+
+    try:
+        with When("I create CHI with slow-starting pod and auto-recovery disabled"):
+            kubectl.apply(util.get_full_path(manifest, lookup_in_host=False))
+
+            with Then("CHI should enter Aborted state after the update timeout"):
+                kubectl.wait_chi_status(chi, "Aborted", retries=20)
+
+            pod = f"chi-{chi}-{cluster}-0-0-0"
+            with And("Wait for the pod to eventually become Ready"):
+                kubectl.wait_field(
+                    "pod",
+                    pod,
+                    ".status.containerStatuses[0].ready",
+                    "true",
+                    retries=30,
+                )
+
+            with Then("CHI must stay Aborted for 30s (auto-recovery is disabled)"):
+                # Poll every 5s instead of a single sleep+check. A single sleep+check could
+                # false-pass if a retry fires at the very end of the window. Polling catches
+                # any status change within the window.
+                for i in range(6):
+                    time.sleep(5)
+                    status = kubectl.get_chi_status(chi)
+                    assert status == "Aborted", error(
+                        f"expected CHI to stay Aborted with onPodReady=none, "
+                        f"got status={status} at poll {i+1}/6"
+                    )
+
+    finally:
+        with Finally("I clean up"):
+            kubectl.delete(util.get_full_path(chopconf_file, lookup_in_host=False), operator_namespace, ok_to_fail=True)
+            delete_test_namespace()
+
+
+@TestScenario
 @Requirements(RQ_SRS_026_ClickHouseOperator_EnableHttps("1.0"))
 @Name("test_010034. Check HTTPS support for health check")
 def test_010034(self):
