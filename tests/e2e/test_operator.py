@@ -31,11 +31,7 @@ def test_010001(self):
     kubectl.create_and_check(
         manifest="manifests/chi/test-001.yaml",
         check={
-            "object_counts": {
-                "statefulset": 1,
-                "pod": 1,
-                "service": 2,
-            },
+            "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
             "configmaps": 1,
             "pdb": {"single": 1},
             "do_not_delete": 1,
@@ -99,11 +95,7 @@ def test_010003(self):
     kubectl.create_and_check(
         manifest="manifests/chi/test-003-complex-layout.yaml",
         check={
-            "object_counts": {
-                "statefulset": 4,
-                "pod": 4,
-                "service": 5,
-            },
+            "object_counts": {"statefulset": 4, "pod": 4, "service": 5},
             "pdb": {"cluster1": 0, "cluster2": 1},
             "do_not_delete": 1
         },
@@ -582,11 +574,7 @@ def test_operator_upgrade(self, manifest, service, version_from, version_to=None
         kubectl.create_and_check(
             manifest=manifest,
             check={
-                "object_counts": {
-                    "statefulset": 2,
-                    "pod": 2,
-                    "service": 3,
-                },
+                "object_counts": {"statefulset": 2, "pod": 2, "service": 3},
                 "do_not_delete": 1,
             },
         )
@@ -1111,11 +1099,7 @@ def test_010012(self):
     kubectl.create_and_check(
         manifest="manifests/chi/test-012-service-template.yaml",
         check={
-            "object_counts": {
-                "statefulset": 2,
-                "pod": 2,
-                "service": 4,
-            },
+            "object_counts": {"statefulset": 2, "pod": 2, "service": 4},
             "do_not_delete": 1,
         },
     )
@@ -1136,11 +1120,7 @@ def test_010012(self):
         kubectl.create_and_check(
             manifest="manifests/chi/test-012-service-template-2.yaml",
             check={
-                "object_counts": {
-                    "statefulset": 1,
-                    "pod": 1,
-                    "service": 4,
-                },
+                "object_counts": {"statefulset": 1, "pod": 1, "service": 4},
                 "do_not_delete": 1,
             },
         )
@@ -1490,11 +1470,7 @@ def test_010014_0(self):
                 current().context.clickhouse_template,
                 "manifests/chit/tpl-persistent-volume-100Mi.yaml",
             },
-            "object_counts": {
-                "statefulset": 2,
-                "pod": 2,
-                "service": 3,
-            },
+            "object_counts": {"statefulset": 2, "pod": 2, "service": 3},
             "pdb": {"default": 1},
             "do_not_delete": 1,
         },
@@ -1928,13 +1904,9 @@ def check_host_network(manifest, replica1_port="9000", replica2_port="9000"):
     kubectl.create_and_check(
         manifest=manifest,
         check={
-            "object_counts": {
-                "statefulset": 2,
-                "pod": 2,
-                "service": 3,
-                },
+            "object_counts": {"statefulset": 2, "pod": 2, "service": 3},
             "do_not_delete": 1,
-            },
+        },
         timeout=600,
     )
 
@@ -2972,11 +2944,7 @@ def test_010025(self):
                 current().context.clickhouse_template,
                 "manifests/chit/tpl-persistent-volume-100Mi.yaml",
             },
-            "object_counts": {
-                "statefulset": 1,
-                "pod": 1,
-                "service": 2,
-            },
+            "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
             "do_not_delete": 1,
         },
         timeout=600,
@@ -3161,11 +3129,7 @@ def test_010027(self):
             kubectl.create_and_check(
                 manifest="manifests/chi/test-027-troubleshooting-2-troubleshoot.yaml",
                 check={
-                    "object_counts": {
-                        "statefulset": 1,
-                        "pod": 1,
-                        "service": 2,
-                    },
+                    "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
                     "do_not_delete": 1,
                 },
             )
@@ -3202,11 +3166,7 @@ def test_010028(self):
                 self.context.clickhouse_template,
                 "manifests/chit/tpl-persistent-volume-100Mi.yaml",
             },
-            "object_counts": {
-                "statefulset": 2,
-                "pod": 2,
-                "service": 3,
-            },
+            "object_counts": {"statefulset": 2, "pod": 2, "service": 3},
             "do_not_delete": 1,
         },
     )
@@ -3588,11 +3548,7 @@ def test_010032(self):
                 self.context.clickhouse_template,
                 "manifests/chit/tpl-persistent-volume-100Mi.yaml",
             },
-            "object_counts": {
-                "statefulset": 4,
-                "pod": 4,
-                "service": 5,
-            },
+            "object_counts": {"statefulset": 4, "pod": 4, "service": 5},
             "do_not_delete": 1,
         },
         timeout=600,
@@ -3656,11 +3612,7 @@ def test_010032(self):
         kubectl.create_and_check(
             manifest="manifests/chi/test-032-rescaling-2.yaml",
             check={
-                "object_counts": {
-                    "statefulset": 4,
-                    "pod": 4,
-                    "service": 5,
-                },
+                "object_counts": {"statefulset": 4, "pod": 4, "service": 5},
                 "do_not_delete": 1,
             },
             timeout=900,
@@ -3730,11 +3682,7 @@ def test_010034(self):
                 "apply_templates": {
                     current().context.clickhouse_template,
                 },
-                "object_counts": {
-                    "statefulset": 1,
-                    "pod": 1,
-                    "service": 2,
-                },
+                "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
                 "do_not_delete": 1,
             },
             timeout=600,
@@ -3791,11 +3739,7 @@ def test_010034(self):
                 "apply_templates": {
                     current().context.clickhouse_template,
                 },
-                "object_counts": {
-                    "statefulset": 1,
-                    "pod": 1,
-                    "service": 2,
-                },
+                "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
                 "do_not_delete": 1,
             },
             timeout=600,
@@ -5107,11 +5051,7 @@ def test_010053(self):
     kubectl.create_and_check(
         manifest=manifest,
         check={
-            "object_counts": {
-                "statefulset": 1,
-                "pod": 1,
-                "service": 2,
-            },
+            "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
             "do_not_delete": 1
         },
     )
@@ -5459,11 +5399,7 @@ def test_010058(self):  # Can be merged with test_034 potentially
                 "apply_templates": {
                     current().context.clickhouse_template,
                 },
-                "object_counts": {
-                    "statefulset": 1,
-                    "pod": 1,
-                    "service": 2,
-                },
+                "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
                 "do_not_delete": 1,
             }
         )
@@ -5590,11 +5526,7 @@ def test_010060(self):
             "apply_templates": {
                 current().context.clickhouse_template,
             },
-            "object_counts": {
-                "statefulset": 1,
-                "pod": 1,
-                "service": 2,
-            },
+            "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
             "configmaps": 1,
             "pdb": {"single": {"is_managed": False}},
             "do_not_delete": 1,
@@ -5624,11 +5556,7 @@ def test_010061(self):
             "apply_templates": {
                 current().context.clickhouse_template,
             },
-            "object_counts": {
-                "statefulset": 1,
-                "pod": 1,
-                "service": 2,
-            },
+            "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
             "do_not_delete": 1,
         },
     )
@@ -5670,13 +5598,6 @@ def test_010061(self):
 
     with Finally("I clean up"):
         delete_test_namespace()
-
-#
-# Hooks tests section
-#
-
-
-CH_CONTAINER = "clickhouse"
 
 
 def check_operator_logs_for_hooks(markers):
