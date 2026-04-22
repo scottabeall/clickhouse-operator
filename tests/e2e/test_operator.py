@@ -5620,6 +5620,8 @@ def test_010062(self):
     Hooks are skipped on first CHI creation (no live hosts yet), so each step creates the CHI
     first, then force-reconciles to trigger the hooks."""
     create_shell_namespace_clickhouse_template()
+    with Given("I change operator statefullSet timeout"):
+        util.apply_operator_config("manifests/chopconf/low-timeout.yaml")
 
     chi = "test-062-hooks"
 
@@ -5663,12 +5665,10 @@ def test_010062(self):
             util.get_full_path("manifests/chi/test-062-hooks-pre-fail.yaml"),
             ns=current().context.test_namespace,
         )
-        time.sleep(30)
 
-    with Then("CHI status should indicate failure"):
+    with Then("CHI should eventually abort"):
         chi_status = kubectl.get_field("chi", chi, ".status.status")
-        assert chi_status in ("Aborted", "InProgress"), \
-            error(f"Expected Aborted or InProgress status, got: {chi_status}")
+        kubectl.wait_chi_status(chi, "Aborted")
 
     kubectl.delete_chi(chi)
 
