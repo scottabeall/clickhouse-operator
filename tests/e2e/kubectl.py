@@ -7,6 +7,8 @@ from testflows.core import *
 from testflows.asserts import error
 # from testflows.connect import Shell
 
+from e2e.retry_sleep import retry_sleep
+
 import e2e.settings as settings
 import e2e.yaml_manifest as yaml_manifest
 import e2e.util as util
@@ -119,8 +121,7 @@ def delete_chk(chk, ns=None, wait=True, ok_to_fail=False, shell=None):
                 name_collision = get_count("chi", chi=chk, ns=ns, shell=shell)
                 if (len(chk_objects_ext) == 0 or name_collision) and len(chk_objects) == 0:
                     break
-                with Then(f"Not ready. Wait for {i * 5} seconds"):
-                    time.sleep(i * 5)
+                retry_sleep(i, 5, "Not ready")
 
             if len(chk_objects_ext) > 0 and not name_collision:
                 print("WARNING: some objects were not deleted:")
@@ -407,14 +408,12 @@ def wait_objects(chi, object_counts, ns=None, shell=None, retries=max_retries):
             cur_object_counts = count_objects(label=f"-l clickhouse.altinity.com/chi={chi}", ns=ns, shell=shell)
             if cur_object_counts == object_counts:
                 break
-            with Then(
-                f"Not ready yet. [ "
+            retry_sleep(i, 5,
+                "Not ready. [ "
                 f"statefulset: {cur_object_counts['statefulset']} "
                 f"pod: {cur_object_counts['pod']} "
-                f"service: {cur_object_counts['service']} ]. "
-                f"Wait for {i * 5} seconds"
-            ):
-                time.sleep(i * 5)
+                f"service: {cur_object_counts['service']} ]",
+            )
         assert cur_object_counts == object_counts, error()
 
 
@@ -424,8 +423,7 @@ def wait_object(kind, name, names=[], label="", count=1, ns=None, retries=max_re
             cur_count = get_count(kind, ns=ns, name=name, label=label, shell=shell)
             if cur_count == count:
                 break
-            with Then(f"Not ready yet. {cur_count}/{count}. Wait for {i * backoff} seconds"):
-                time.sleep(i * backoff)
+            retry_sleep(i, backoff, f"Not ready ({cur_count}/{count})")
         assert cur_count == count, error()
 
 
@@ -435,8 +433,7 @@ def wait_command(command, result, count=1, ns=None, retries=max_retries):
             res = launch(command, ok_to_fail=True, ns=ns)
             if res == result:
                 break
-            with Then("Not ready. Wait for " + str(i * 5) + " seconds"):
-                time.sleep(i * 5)
+            retry_sleep(i, 5, f"Not ready ({res})")
         assert res == result, error()
 
 
@@ -482,8 +479,7 @@ def wait_field(
         for i in range(1, retries):
             if cur_value == value:
                 break
-            with Then("Not ready. Wait for " + str(i * backoff) + " seconds"):
-                time.sleep(i * backoff)
+            retry_sleep(i, backoff, f"Not ready ({cur_value})")
             cur_value = get_field(kind, name, field, ns, shell=shell)
         assert cur_value == value or throw_error is False, error()
 
@@ -503,8 +499,7 @@ def wait_field_changed(
             cur_value = get_field(kind, name, field, ns)
             if cur_value != "" and cur_value != prev_value:
                 break
-            with Then("Not ready. Wait for " + str(i * backoff) + " seconds"):
-                time.sleep(i * backoff)
+            retry_sleep(i, backoff, "Not ready")
         assert cur_value != "" and cur_value != prev_value or throw_error == False, error()
 
 
@@ -514,8 +509,7 @@ def wait_jsonpath(kind, name, field, value, ns=None, retries=max_retries):
             cur_value = get_jsonpath(kind, name, field, ns)
             if cur_value == value:
                 break
-            with Then("Not ready. Wait for " + str(i * 5) + " seconds"):
-                time.sleep(i * 5)
+            retry_sleep(i, 5, f"Not ready ({cur_value})")
         assert cur_value == value, error()
 
 
