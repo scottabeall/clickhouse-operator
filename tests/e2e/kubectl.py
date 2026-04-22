@@ -386,13 +386,13 @@ def replace(manifest, ns=None, validate=True, timeout=600):
         launch(f"replace --validate={validate} -f {manifest}", ns=ns, timeout=timeout)
 
 
-def delete(manifest, ns=None, timeout=600):
+def delete(manifest, ns=None, timeout=600, ok_to_fail=False):
     with When(f"{manifest} is deleted"):
         if " | " not in manifest:
             manifest = f'"{manifest}"'
-            return launch(f"delete -f {manifest}", ns=ns, timeout=timeout)
+            return launch(f"delete -f {manifest}", ns=ns, timeout=timeout, ok_to_fail=ok_to_fail)
         else:
-            run_shell(f"{manifest} | {current().context.kubectl_cmd} delete -f -", timeout=timeout)
+            run_shell(f"{manifest} | {current().context.kubectl_cmd} delete -f -", timeout=timeout, ok_to_fail=ok_to_fail)
 
 
 def wait_objects(chi, object_counts, ns=None, shell=None, retries=max_retries):
