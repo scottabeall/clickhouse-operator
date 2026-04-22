@@ -34,20 +34,34 @@ NO_CLEANUP="${NO_CLEANUP:-""}"
 # Image lists for preloading into minikube
 # =============================================================================
 
+# NOTE: Keep this list in sync with images referenced from:
+#   - tests/e2e/manifests/**/*.yaml                   (test-specific manifests)
+#   - tests/e2e/manifests/chit/tpl-clickhouse-stable.yaml   (default CLICKHOUSE_TEMPLATE)
+#   - tests/e2e/manifests/chit/tpl-clickhouse-23.3.yaml     (clickhouse_template_old)
+#   - tests/e2e/manifests/chk/*.yaml                  (keeper tests, incl. FIPS)
+# Intentionally EXCLUDED from preload:
+#   - clickhouse/clickhouse-server:24.3-broken / :24.822   (meant-to-fail rollback tests)
+#   - yandex/clickhouse-server:*                           (opt-in via CLICKHOUSE_TEMPLATE)
+#   - altinity/clickhouse-server:22.8.15.25.altinitystable (only in optional tpl-clickhouse-22.8.yaml)
+# Quick audit:
+#   grep -rhE "image:[[:space:]]+[a-zA-Z0-9._/-]+:[a-zA-Z0-9._-]+" tests/e2e/manifests/ | sort -u
+
 PRELOAD_IMAGES_OPERATOR=(
     # ClickHouse server versions used in manifests and templates
+    "clickhouse/clickhouse-server:23.3"        # clickhouse_template_old + older-version compat tests
     "clickhouse/clickhouse-server:23.8"
-    "clickhouse/clickhouse-server:24.3"
+    "clickhouse/clickhouse-server:24.3"        # also base for 24.3-broken rollback tests
     "clickhouse/clickhouse-server:24.8"
     "clickhouse/clickhouse-server:25.3"
     "clickhouse/clickhouse-server:25.8"
     "clickhouse/clickhouse-server:latest"
     # Altinity builds (default stable template + FIPS)
-    "altinity/clickhouse-server:25.8.16.10001.altinitystable"
-    "altinity/clickhouse-server:24.3.5.48.altinityfips"
-    # ClickHouse Keeper versions used in operator tests
+    "altinity/clickhouse-server:25.8.16.10001.altinitystable"  # default clickhouse_template
+    "altinity/clickhouse-server:25.3.8.30001.altinityfips"     # FIPS CHI (e.g. manifests/chk/test-020008-chi-fips.yaml)
+    # ClickHouse Keeper versions used in operator tests (test_010063, test_020008, ...)
     "clickhouse/clickhouse-keeper:25.3"
     "clickhouse/clickhouse-keeper:25.8"
+    "altinity/clickhouse-keeper:25.3.8.30001.altinityfips"
     # Zookeeper
     "docker.io/zookeeper:3.8.4"
     # Misc
@@ -67,12 +81,11 @@ PRELOAD_IMAGES_KEEPER=(
     "clickhouse/clickhouse-server:25.8"
     "clickhouse/clickhouse-server:latest"
     # Altinity builds
-    "altinity/clickhouse-server:25.8.16.10001.altinitystable"
+    "altinity/clickhouse-server:25.8.16.10001.altinitystable"  # default clickhouse_template
+    "altinity/clickhouse-server:25.3.8.30001.altinityfips"     # FIPS CHI (manifests/chk/test-020008-chi-fips.yaml)
     # ClickHouse Keeper versions
     "clickhouse/clickhouse-keeper:25.3"
     "clickhouse/clickhouse-keeper:25.8"
-    "clickhouse/clickhouse-keeper:25.8"
-    "docker.io/clickhouse/clickhouse-keeper:25.8"
     "altinity/clickhouse-keeper:25.3.8.30001.altinityfips"
     # Zookeeper
     "docker.io/zookeeper:3.8.4"
@@ -82,6 +95,8 @@ PRELOAD_IMAGES_METRICS=(
     "clickhouse/clickhouse-server:23.3"
     "clickhouse/clickhouse-server:25.3"
     "clickhouse/clickhouse-server:latest"
+    "altinity/clickhouse-server:25.8.16.10001.altinitystable"  # default clickhouse_template
+    "docker.io/zookeeper:3.8.4"                                # metrics_alerts exec's into zookeeper-0 pod
 )
 
 # =============================================================================
