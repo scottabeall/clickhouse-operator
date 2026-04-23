@@ -1689,8 +1689,25 @@ def test_010014_0(self):
 
             domain = current().context.test_namespace + ".svc.cluster.local"
 
-            assert hosts_with_tables[2] == f"chi-{chi_name}-{cluster}-0-1.{domain}"
-            assert hosts_with_tables[3] == f"chi-{chi_name}-{cluster}-1-1.{domain}"
+            assert f"chi-{chi_name}-{cluster}-0-1.{domain}" in hosts_with_tables
+            assert f"chi-{chi_name}-{cluster}-1-1.{domain}" in hosts_with_tables
+
+        with Then("Ensure replication is has cought up"):
+            for i in range(1,10):
+                replica_delay = clickhouse.query(chi_name, "select max(absolute_delay) from clusterAllReplicas('{cluster}', system.replicas)")
+                if replica_delay == "0":
+                    break
+                retry_sleep(i, 5)
+            assert replica_delay == "0"
+
+        with Then("CHI status has all nodes in hostsWithReplicaCaughtUp"):
+            hosts_with_tables = kubectl.get("chi", chi_name)["status"]["hostsWithReplicaCaughtUp"]
+            print(yaml.safe_dump(hosts_with_tables))
+
+            domain = current().context.test_namespace + ".svc.cluster.local"
+
+            assert f"chi-{chi_name}-{cluster}-0-1.{domain}" in hosts_with_tables
+            assert f"chi-{chi_name}-{cluster}-1-1.{domain}" in hosts_with_tables
 
     with When("Restart (Zoo)Keeper pod"):
         if self.context.keeper_type == "zookeeper":
@@ -1737,7 +1754,7 @@ def test_010014_0(self):
         new_start_time = kubectl.get_field("pod", f"chi-{chi_name}-{cluster}-0-0-0", ".status.startTime")
         assert start_time == new_start_time
 
-        with Then(f"Replica is removed from the {self.context.keeper_type}"):
+        with And(f"Replica is removed from the {self.context.keeper_type}"):
             for shard in shards:
                 out = clickhouse.query(
                     chi_name,
@@ -1747,6 +1764,23 @@ def test_010014_0(self):
                 assert out == "1"
 
         util.check_query_log(chi_name, ['SYSTEM DROP REPLICA'], ['DROP TABLE', 'DROP DATABASE'], query_log_start)
+
+        with And("Replica is removed from status.hostsWithTablesCreated"):
+            hosts_with_tables = kubectl.get("chi", chi_name)["status"]["hostsWithTablesCreated"]
+            print(yaml.safe_dump(hosts_with_tables))
+
+            domain = current().context.test_namespace + ".svc.cluster.local"
+            assert f"chi-{chi_name}-{cluster}-0-1.{domain}" not in hosts_with_tables
+            assert f"chi-{chi_name}-{cluster}-1-1.{domain}" not in hosts_with_tables
+
+        with And("Replica is removed from status.hostsWithReplicaCaughtUp"):
+            hosts_with_tables = kubectl.get("chi", chi_name)["status"]["hostsWithReplicaCaughtUp"]
+            print(yaml.safe_dump(hosts_with_tables))
+
+            domain = current().context.test_namespace + ".svc.cluster.local"
+            assert f"chi-{chi_name}-{cluster}-0-1.{domain}" not in hosts_with_tables
+            assert f"chi-{chi_name}-{cluster}-1-1.{domain}" not in hosts_with_tables
+
 
     with When("Add replica one more time"):
         manifest = "manifests/chi/test-014-0-replication-2.yaml"
