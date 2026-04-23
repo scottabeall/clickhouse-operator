@@ -3,6 +3,11 @@ kind: "ClickHouseInstallation"
 metadata:
   name: test-062-hooks
 spec:
+  defaults:
+    templates:
+      podTemplate: default
+  useTemplates:
+    - name: clickhouse-version
   reconcile:
     host:
       hooks:

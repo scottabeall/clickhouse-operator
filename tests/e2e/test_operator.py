@@ -31,11 +31,7 @@ def test_010001(self):
     kubectl.create_and_check(
         manifest="manifests/chi/test-001.yaml",
         check={
-            "object_counts": {
-                "statefulset": 1,
-                "pod": 1,
-                "service": 2,
-            },
+            "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
             "configmaps": 1,
             "pdb": {"single": 1},
             "do_not_delete": 1,
@@ -99,11 +95,7 @@ def test_010003(self):
     kubectl.create_and_check(
         manifest="manifests/chi/test-003-complex-layout.yaml",
         check={
-            "object_counts": {
-                "statefulset": 4,
-                "pod": 4,
-                "service": 5,
-            },
+            "object_counts": {"statefulset": 4, "pod": 4, "service": 5},
             "pdb": {"cluster1": 0, "cluster2": 1},
             "do_not_delete": 1
         },
@@ -582,11 +574,7 @@ def test_operator_upgrade(self, manifest, service, version_from, version_to=None
         kubectl.create_and_check(
             manifest=manifest,
             check={
-                "object_counts": {
-                    "statefulset": 2,
-                    "pod": 2,
-                    "service": 3,
-                },
+                "object_counts": {"statefulset": 2, "pod": 2, "service": 3},
                 "do_not_delete": 1,
             },
         )
@@ -1111,11 +1099,7 @@ def test_010012(self):
     kubectl.create_and_check(
         manifest="manifests/chi/test-012-service-template.yaml",
         check={
-            "object_counts": {
-                "statefulset": 2,
-                "pod": 2,
-                "service": 4,
-            },
+            "object_counts": {"statefulset": 2, "pod": 2, "service": 4},
             "do_not_delete": 1,
         },
     )
@@ -1136,11 +1120,7 @@ def test_010012(self):
         kubectl.create_and_check(
             manifest="manifests/chi/test-012-service-template-2.yaml",
             check={
-                "object_counts": {
-                    "statefulset": 1,
-                    "pod": 1,
-                    "service": 4,
-                },
+                "object_counts": {"statefulset": 1, "pod": 1, "service": 4},
                 "do_not_delete": 1,
             },
         )
@@ -1490,11 +1470,7 @@ def test_010014_0(self):
                 current().context.clickhouse_template,
                 "manifests/chit/tpl-persistent-volume-100Mi.yaml",
             },
-            "object_counts": {
-                "statefulset": 2,
-                "pod": 2,
-                "service": 3,
-            },
+            "object_counts": {"statefulset": 2, "pod": 2, "service": 3},
             "pdb": {"default": 1},
             "do_not_delete": 1,
         },
@@ -1928,13 +1904,9 @@ def check_host_network(manifest, replica1_port="9000", replica2_port="9000"):
     kubectl.create_and_check(
         manifest=manifest,
         check={
-            "object_counts": {
-                "statefulset": 2,
-                "pod": 2,
-                "service": 3,
-                },
+            "object_counts": {"statefulset": 2, "pod": 2, "service": 3},
             "do_not_delete": 1,
-            },
+        },
         timeout=600,
     )
 
@@ -2972,11 +2944,7 @@ def test_010025(self):
                 current().context.clickhouse_template,
                 "manifests/chit/tpl-persistent-volume-100Mi.yaml",
             },
-            "object_counts": {
-                "statefulset": 1,
-                "pod": 1,
-                "service": 2,
-            },
+            "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
             "do_not_delete": 1,
         },
         timeout=600,
@@ -3161,11 +3129,7 @@ def test_010027(self):
             kubectl.create_and_check(
                 manifest="manifests/chi/test-027-troubleshooting-2-troubleshoot.yaml",
                 check={
-                    "object_counts": {
-                        "statefulset": 1,
-                        "pod": 1,
-                        "service": 2,
-                    },
+                    "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
                     "do_not_delete": 1,
                 },
             )
@@ -3202,11 +3166,7 @@ def test_010028(self):
                 self.context.clickhouse_template,
                 "manifests/chit/tpl-persistent-volume-100Mi.yaml",
             },
-            "object_counts": {
-                "statefulset": 2,
-                "pod": 2,
-                "service": 3,
-            },
+            "object_counts": {"statefulset": 2, "pod": 2, "service": 3},
             "do_not_delete": 1,
         },
     )
@@ -3463,17 +3423,7 @@ def test_010031(self):
                     assert "excl" not in annotations, error()
 
     with Finally("I clean up"):
-        with By("deleting chi"):
-            kubectl.delete_chi(chi)
-
-        with And("restoring original operator state"):
-            util.install_operator_if_not_exist(
-                reinstall=True,
-                manifest=util.get_full_path(current().context.clickhouse_operator_install_manifest, False),
-            )
-            util.restart_operator(ns=current().context.operator_namespace)
-        with And("deleting test namespace"):
-            delete_test_namespace()
+        delete_test_namespace()
 
 
 @TestCheck
@@ -3588,11 +3538,7 @@ def test_010032(self):
                 self.context.clickhouse_template,
                 "manifests/chit/tpl-persistent-volume-100Mi.yaml",
             },
-            "object_counts": {
-                "statefulset": 4,
-                "pod": 4,
-                "service": 5,
-            },
+            "object_counts": {"statefulset": 4, "pod": 4, "service": 5},
             "do_not_delete": 1,
         },
         timeout=600,
@@ -3656,11 +3602,7 @@ def test_010032(self):
         kubectl.create_and_check(
             manifest="manifests/chi/test-032-rescaling-2.yaml",
             check={
-                "object_counts": {
-                    "statefulset": 4,
-                    "pod": 4,
-                    "service": 5,
-                },
+                "object_counts": {"statefulset": 4, "pod": 4, "service": 5},
                 "do_not_delete": 1,
             },
             timeout=900,
@@ -3838,11 +3780,7 @@ def test_010034(self):
                 "apply_templates": {
                     current().context.clickhouse_template,
                 },
-                "object_counts": {
-                    "statefulset": 1,
-                    "pod": 1,
-                    "service": 2,
-                },
+                "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
                 "do_not_delete": 1,
             },
             timeout=600,
@@ -3899,11 +3837,7 @@ def test_010034(self):
                 "apply_templates": {
                     current().context.clickhouse_template,
                 },
-                "object_counts": {
-                    "statefulset": 1,
-                    "pod": 1,
-                    "service": 2,
-                },
+                "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
                 "do_not_delete": 1,
             },
             timeout=600,
@@ -5215,11 +5149,7 @@ def test_010053(self):
     kubectl.create_and_check(
         manifest=manifest,
         check={
-            "object_counts": {
-                "statefulset": 1,
-                "pod": 1,
-                "service": 2,
-            },
+            "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
             "do_not_delete": 1
         },
     )
@@ -5567,11 +5497,7 @@ def test_010058(self):  # Can be merged with test_034 potentially
                 "apply_templates": {
                     current().context.clickhouse_template,
                 },
-                "object_counts": {
-                    "statefulset": 1,
-                    "pod": 1,
-                    "service": 2,
-                },
+                "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
                 "do_not_delete": 1,
             }
         )
@@ -5698,11 +5624,7 @@ def test_010060(self):
             "apply_templates": {
                 current().context.clickhouse_template,
             },
-            "object_counts": {
-                "statefulset": 1,
-                "pod": 1,
-                "service": 2,
-            },
+            "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
             "configmaps": 1,
             "pdb": {"single": {"is_managed": False}},
             "do_not_delete": 1,
@@ -5732,11 +5654,7 @@ def test_010061(self):
             "apply_templates": {
                 current().context.clickhouse_template,
             },
-            "object_counts": {
-                "statefulset": 1,
-                "pod": 1,
-                "service": 2,
-            },
+            "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
             "do_not_delete": 1,
         },
     )
@@ -5774,24 +5692,18 @@ def test_010061(self):
     with Then("ActionPlan should not contain Templates.PodTemplates[0].Spec.Containers[0].Resources [2]"):
         assert "Templates.PodTemplates[0].Spec.Containers[0].Resources" not in actionPlan
 
-    kubectl.delete_chi(chi)
-
     with Finally("I clean up"):
         delete_test_namespace()
 
-#
-# Hooks tests section
-#
 
-
-CH_CONTAINER = "clickhouse"
-
-
-def check_operator_logs_for_hooks(markers):
-    """Check clickhouse-operator pod logs for hook execution markers."""
+def check_operator_logs(markers, since = ""):
+    """Check clickhouse-operator pod logs for specific markers.
+    since is accpeted as XXs format to filter out recent rows only"""
     operator_pod = kubectl.get_operator_pod(ns=current().context.test_namespace)
+    if since != "":
+        since = f"--since={since}"
     out = kubectl.launch(
-        f"logs {operator_pod} -c clickhouse-operator",
+        f"logs {operator_pod} -c clickhouse-operator {since}",
         ns=current().context.test_namespace,
     )
     for marker in markers:
@@ -5807,6 +5719,8 @@ def test_010062(self):
     Hooks are skipped on first CHI creation (no live hosts yet), so each step creates the CHI
     first, then force-reconciles to trigger the hooks."""
     create_shell_namespace_clickhouse_template()
+    with Given("I change operator statefullSet timeout"):
+        util.apply_operator_config("manifests/chopconf/low-timeout.yaml")
 
     chi = "test-062-hooks"
 
@@ -5825,7 +5739,7 @@ def test_010062(self):
         kubectl.force_chi_reconcile(chi, "combined-hooks")
 
     with Then("All four hook markers appear in operator logs"):
-        check_operator_logs_for_hooks([
+        check_operator_logs([
             "cluster_pre_hook_marker", "cluster_post_hook_marker",
             "host_pre_hook_marker", "host_post_hook_marker",
         ])
@@ -5842,7 +5756,7 @@ def test_010062(self):
         )
 
     with Then("allhosts_hook_marker and 'all hosts' appear in operator logs"):
-        check_operator_logs_for_hooks(["allhosts_hook_marker", "Running SQL cluster hook on all hosts"])
+        check_operator_logs(["allhosts_hook_marker", "Running SQL cluster hook on all hosts"])
 
     # Step 3: Pre-hook failure aborts reconcile — apply failing hook to existing CHI
     with When("Apply CHI with a pre-hook that fails"):
@@ -5850,14 +5764,10 @@ def test_010062(self):
             util.get_full_path("manifests/chi/test-062-hooks-pre-fail.yaml"),
             ns=current().context.test_namespace,
         )
-        time.sleep(30)
 
-    with Then("CHI status should indicate failure"):
+    with Then("CHI should eventually abort"):
         chi_status = kubectl.get_field("chi", chi, ".status.status")
-        assert chi_status in ("Aborted", "InProgress"), \
-            error(f"Expected Aborted or InProgress status, got: {chi_status}")
-
-    kubectl.delete_chi(chi)
+        kubectl.wait_chi_status(chi, "Aborted")
 
     with Finally("I clean up"):
         delete_test_namespace()
@@ -5871,7 +5781,7 @@ def test_010063(self):
     create_shell_namespace_clickhouse_template()
 
     chk_manifest = "manifests/chk/test-063-keeper-ref-chk.yaml"
-    chk_manifest_2 = "manifests/chk/test-063-keeper-ref-chk-2.yaml"
+    chk_manifest_3nodes = "manifests/chk/test-063-keeper-ref-chk-2.yaml"
     chi_manifest = "manifests/chi/test-063-keeper-ref.yaml"
     chk = "test-063-chk"
     chi = "test-063-keeper-ref"
@@ -5881,8 +5791,8 @@ def test_010063(self):
             manifest=chk_manifest,
             kind="chk",
             check={
-                "do_not_delete": 1,
                 "pod_count": 1,
+                "do_not_delete": 1,
             },
         )
 
@@ -5896,22 +5806,22 @@ def test_010063(self):
             },
         )
 
-    with Then("ClickHouse can access ZooKeeper via resolved keeper reference"):
+    with Then("ClickHouse can access Keeper via resolved keeper reference"):
         out = clickhouse.query(chi, "SELECT path FROM system.zookeeper WHERE path = '/' limit 1")
         assert out == '/', error("ClickHouse should be able to query ZooKeeper")
 
-    with And("ZooKeeper is accessible from all replicas"):
+    with And("Keeper is accessible from all replicas"):
         for pod_name in kubectl.get_pod_names(chi):
             out = clickhouse.query(chi, "SELECT path FROM system.zookeeper WHERE path = '/' limit 1", pod=pod_name)
             assert out == '/', error(f"ZooKeeper should be accessible from {pod_name}")
 
     with When("Rescale Keeper to 3 nodes"):
         kubectl.create_and_check(
-            manifest=chk_manifest_2,
+            manifest=chk_manifest_3nodes,
             kind="chk",
             check={
-                "do_not_delete": 1,
                 "pod_count": 3,
+                "do_not_delete": 1,
             },
         )
         with Then("Push CHI reconcile"):
@@ -5922,8 +5832,6 @@ def test_010063(self):
             # print(zookeeper_config)
             node_count = zookeeper_config.count("<node>")
             assert node_count == 3, error("ZooKeeper configuration should contain 3 nodes now")
-
-    kubectl.delete_chi(chi)
 
     with Finally("I clean up"):
         delete_test_namespace()
@@ -5938,17 +5846,15 @@ def test_010064(self):
     create_shell_namespace_clickhouse_template()
 
     chk_manifest = "manifests/chk/test-063-keeper-ref-chk.yaml"
+    chk_manifest_3nodes = "manifests/chk/test-063-keeper-ref-chk-2.yaml"
     chi_manifest = "manifests/chi/test-063-keeper-ref.yaml"
     chopconf_manifest = "manifests/chopconf/test-063-keeper-watch.yaml"
     chk = "test-063-chk"
     chi = "test-063-keeper-ref"
+    cluster = "default"
 
     with Given("Operator configuration enables keeper watch"):
-        kubectl.apply(
-            util.get_full_path(chopconf_manifest, lookup_in_host=False),
-            current().context.operator_namespace,
-        )
-        util.restart_operator(ns=current().context.operator_namespace)
+        util.apply_operator_config(chopconf_manifest)
 
     with And("CHK is installed and ready"):
         kubectl.create_and_check(
@@ -5969,36 +5875,51 @@ def test_010064(self):
             },
         )
 
+    start_time = kubectl.get_field("pod", f"chi-{chi}-{cluster}-0-0-0", ".status.startTime")
+    connected_time = ""
+    with And("CHI is connected to Keeper"):
+        connected_time = clickhouse.query(chi, "SELECT connected_time from system.zookeeper_connection")
+        assert connected_time != ""
+
     with When("Trigger CHK reconcile by patching taskID"):
-        operator_pod = kubectl.get_operator_pod(ns=current().context.test_namespace)
-        kubectl.launch(
-            f"patch chk {chk} --type='json' --patch='[{{\"op\":\"add\",\"path\":\"/spec/taskID\",\"value\":\"keeper-watch-test\"}}]'",
+        kubectl.force_chk_reconcile(chk, "keeper-watch-test")
+
+        with Then("Confirm CHI is complete"):
+            kubectl.wait_chi_status(chi, "Completed")
+
+        with Then("CHI has not been restarted"):
+            new_start_time = kubectl.get_field("pod", f"chi-{chi}-{cluster}-0-0-0", ".status.startTime")
+            assert new_start_time == start_time, error("CHI has been restarted")
+
+        with Then("CHI does not reconnect to Keeper"):
+            new_connected_time = clickhouse.query(chi, "SELECT connected_time from system.zookeeper_connection")
+            assert new_connected_time == connected_time, error("ClickHouse reconnected to Keeper")
+
+    with When("Rescale Keeper to 3 nodes"):
+        kubectl.create_and_check(
+            manifest=chk_manifest_3nodes,
+            kind="chk",
+            check={
+                "pod_count": 3,
+                "do_not_delete": 1,
+            },
         )
 
-    with Then("While CHK is InProgress, CHI reconcile should NOT be triggered"):
-        time.sleep(5)
-        chk_status = kubectl.get_field("chk", chk, ".status.status")
-        if chk_status != "Completed":
-            logs_during = kubectl.launch(
-                f"logs {operator_pod} -c clickhouse-operator --since=30s",
-                ns=current().context.test_namespace,
-            )
-            assert "Triggering reconcile for CHI" not in logs_during, \
-                error("CHI reconcile was triggered before CHK reached Completed")
+        with Then("Confirm CHI is completed"):
+            kubectl.wait_chi_status(chi, "Completed")
 
-    with When("Wait for CHK to reach Completed"):
-        kubectl.wait_field("chk", chk, ".status.status", "Completed", retries=30)
+        with Then("CHI should be reconfigured for 3 node ZooKeeper"):
+            zookeeper_config = kubectl.get("configmap", f"chi-{chi}-deploy-confd-default-0-0")["data"]["chop-generated-zookeeper.xml"]
+            node_count = zookeeper_config.count("<node>")
+            assert node_count == 3, error("ZooKeeper configuration should contain 3 nodes now")
 
-    with Then("After CHK completes, operator logs should show CHK watch triggered CHI reconcile"):
-        time.sleep(15)
-        logs_after = kubectl.launch(
-            f"logs {operator_pod} -c clickhouse-operator",
-            ns=current().context.test_namespace,
-        )
-        assert "Triggering reconcile for CHI" in logs_after and chi in logs_after, \
-            error(f"Expected keeper watch trigger in operator logs for CHI {chi}")
+        with Then("CHI has not been restarted"):
+            new_start_time = kubectl.get_field("pod", f"chi-{chi}-{cluster}-0-0-0", ".status.startTime")
+            assert new_start_time == start_time, error("CHI has been restarted")
 
-    kubectl.delete_chi(chi)
+        with Then("CHI does not reconnect to Keeper"):
+            new_connected_time = clickhouse.query(chi, "SELECT connected_time from system.zookeeper_connection")
+            assert new_connected_time == connected_time, error("ClickHouse reconnected to Keeper")
 
     with Finally("I clean up"):
         delete_test_namespace()
