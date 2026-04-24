@@ -57,6 +57,11 @@ const (
 	// OnConfigurationChangeRestart means exit the process so the pod restarts with the new config.
 	OnConfigurationChangeRestart = "restart"
 
+	// RecoveryActionNone means do nothing, CHI stays Aborted.
+	RecoveryActionNone = "none"
+	// RecoveryActionRetry means re-enqueue CHI for reconcile (default).
+	RecoveryActionRetry = "retry"
+
 	// Default values for ClickHouse user configuration
 	// 1. user/profile
 	// 2. user/quota
@@ -525,6 +530,40 @@ type OperatorConfigReconcile struct {
 
 	// Coordination specifies how the operator coordinates with external systems during reconcile.
 	Coordination OperatorConfigCoordination `json:"coordination" yaml:"coordination"`
+
+	// Recovery specifies how the operator auto-recovers from aborted reconcile when recovery
+	// signals arrive (e.g. a pod becomes Ready). Each onXxx key maps a signal to an action.
+	Recovery OperatorConfigReconcileRecovery `json:"recovery,omitempty" yaml:"recovery,omitempty"`
+}
+
+// OperatorConfigReconcileRecovery specifies auto-recovery behavior for reconcile.
+// Event→action mappings are scoped by the CHI state we recover FROM (under .From).
+// Global policy knobs (future: retries, backoff, cooldown, enabled) sit as flat peers
+// of .From at this level. Multi-scope design anticipates future states beyond Aborted
+// (e.g. Failed, Broken).
+type OperatorConfigReconcileRecovery struct {
+	// From maps the CHI state we recover from (e.g. aborted) to event→action mappings.
+	From OperatorConfigReconcileRecoveryFrom `json:"from,omitempty" yaml:"from,omitempty"`
+}
+
+// OperatorConfigReconcileRecoveryFrom groups recovery-event mappings by the CHI state
+// being recovered from. Each sub-field is a scope whose keys are on<Event> recovery
+// triggers.
+type OperatorConfigReconcileRecoveryFrom struct {
+	// Aborted scope — recovery from Status=Aborted.
+	Aborted OperatorConfigReconcileRecoveryScope `json:"aborted,omitempty" yaml:"aborted,omitempty"`
+	// Future: Failed, Broken, etc.
+}
+
+// OperatorConfigReconcileRecoveryScope holds the event→action mappings for a single
+// recovery scope. The scope key itself (e.g. aborted) identifies which CHI state the
+// mappings apply to.
+type OperatorConfigReconcileRecoveryScope struct {
+	// OnPodReady controls reaction when a pod belonging to a CHI in this scope becomes Ready:
+	//   nil / "retry" (default) — re-enqueue CHI for reconcile
+	//   "none"                  — do nothing, CHI stays in the state
+	OnPodReady *types.String `json:"onPodReady,omitempty" yaml:"onPodReady,omitempty"`
+	// Future: OnKeeperReady, OnOperatorRestart.
 }
 
 type OperatorConfigReconcileRuntime struct {
@@ -1435,6 +1474,18 @@ func (c *OperatorConfig) copyWithHiddenCredentials() *OperatorConfig {
 // ClickHouseOperatorConfiguration changes (so the pod restarts).
 func (c *OperatorConfig) RestartOnOperatorConfigurationChange() bool {
 	return strings.ToLower(c.Watch.Configuration.OnChange.String()) == OnConfigurationChangeRestart
+}
+
+// ShouldRecoverAbortedOnPodReady reports whether the operator should re-enqueue a CHI
+// reconcile when a pod belonging to an Aborted CHI transitions to Ready. Default is to retry.
+// Backed by reconcile.recovery.from.aborted.onPodReady config key.
+func (c *OperatorConfig) ShouldRecoverAbortedOnPodReady() bool {
+	value := strings.ToLower(c.Reconcile.Recovery.From.Aborted.OnPodReady.String())
+	if value == "" {
+		// Default behavior — retry
+		return true
+	}
+	return value == RecoveryActionRetry
 }
 
 // IsNamespaceWatched returns whether specified namespace is in a list of watched
