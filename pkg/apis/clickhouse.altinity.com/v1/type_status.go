@@ -129,6 +129,9 @@ func (s *Status) Fill(params *FillStatusParams) {
 		s.Endpoint = util.NormalizeFQDN(params.Endpoint)
 		s.Endpoints = util.NormalizeFQDNs(params.Endpoints)
 		s.NormalizedCR = params.NormalizedCR
+
+		s.HostsWithTablesCreated = util.TrimHostListToFQDNs(s.HostsWithTablesCreated, s.FQDNs)
+		s.HostsWithReplicaCaughtUp = util.TrimHostListToFQDNs(s.HostsWithReplicaCaughtUp, s.FQDNs)
 	})
 }
 
@@ -185,15 +188,14 @@ func (s *Status) PushHostTablesCreated(host string) {
 // SyncHostTablesCreated syncs list of hosts with tables created with actual list of hosts
 func (s *Status) SyncHostTablesCreated() {
 	doWithWriteLock(s, func(s *Status) {
-		if s.FQDNs == nil {
-			return
-		}
-		// Normalize both sides to handle status data written by older operator versions
-		// that may contain trailing dots.
-		s.HostsWithTablesCreated = util.IntersectStringArrays(
-			util.NormalizeFQDNs(s.HostsWithTablesCreated),
-			util.NormalizeFQDNs(s.FQDNs),
-		)
+		s.HostsWithTablesCreated = util.TrimHostListToFQDNs(s.HostsWithTablesCreated, s.FQDNs)
+	})
+}
+
+// SyncHostsWithReplicaCaughtUp syncs hostsWithReplicaCaughtUp with the current FQDN list
+func (s *Status) SyncHostsWithReplicaCaughtUp() {
+	doWithWriteLock(s, func(s *Status) {
+		s.HostsWithReplicaCaughtUp = util.TrimHostListToFQDNs(s.HostsWithReplicaCaughtUp, s.FQDNs)
 	})
 }
 

@@ -59,7 +59,9 @@ func (w *worker) clean(ctx context.Context, cr api.ICustomResource) {
 		util.WaitContextDoneOrTimeout(ctx, 1*time.Minute)
 	}
 
-	cr.(*api.ClickHouseInstallation).EnsureStatus().SyncHostTablesCreated()
+	st := cr.(*api.ClickHouseInstallation).EnsureStatus()
+	st.SyncHostTablesCreated()
+	st.SyncHostsWithReplicaCaughtUp()
 }
 
 // dropZKReplicas cleans Zookeeper for replicas that are properly deleted - via Action Plan

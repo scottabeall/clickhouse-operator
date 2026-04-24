@@ -178,20 +178,22 @@ func Test_ChiStatus_BasicOperations_SingleStatus_ConcurrencyTest(t *testing.T) {
 				// Race-dependent outcome.
 				//   - Both pushes survived around CopyFrom: len == len(from.Actions) + 2
 				//   - B's push raced A's CopyFrom (A's push was overwritten): len == len(from.Actions) + 1
-				// In either case, all copy-source actions must be present and at least the
+				// In either case, all copy-source actions must be present and at least
 				// "additional-action" (B's push) is guaranteed to survive.
-				if len(s.GetActions()) == len(copyTestStatusFrom.GetActions())+2 {
+				switch len(s.GetActions()) {
+				case len(copyTestStatusFrom.GetActions()) + 2:
 					require.Contains(tt, s.GetActions(), "always-present-action")
 					require.Contains(tt, s.GetActions(), "additional-action")
 					for _, action := range copyTestStatusFrom.GetActions() {
 						require.Contains(tt, s.GetActions(), action)
 					}
-				} else {
-					require.Equal(tt, len(copyTestStatusFrom.GetActions())+1, len(s.GetActions()))
+				case len(copyTestStatusFrom.GetActions()) + 1:
 					require.Contains(tt, s.GetActions(), "additional-action")
 					for _, action := range copyTestStatusFrom.GetActions() {
 						require.Contains(tt, s.GetActions(), action)
 					}
+				default:
+					require.Fail(tt, "unexpected actions length", "got %d actions: %v", len(s.GetActions()), s.GetActions())
 				}
 				require.Equal(tt, copyTestStatusFrom.GetAction(), s.GetAction())
 				require.Equal(tt, copyTestStatusFrom.GetCHOpCommit(), s.GetCHOpCommit())
@@ -210,8 +212,6 @@ func Test_ChiStatus_BasicOperations_SingleStatus_ConcurrencyTest(t *testing.T) {
 				require.Equal(tt, copyTestStatusFrom.GetHostsDeleteCount(), s.GetHostsDeleteCount())
 				require.Equal(tt, copyTestStatusFrom.GetHostsDeletedCount(), s.GetHostsDeletedCount())
 				require.Equal(tt, copyTestStatusFrom.GetHostsUpdatedCount(), s.GetHostsUpdatedCount())
-				require.Equal(tt, copyTestStatusFrom.GetHostsWithTablesCreated(), s.GetHostsWithTablesCreated())
-				require.Equal(tt, copyTestStatusFrom.GetHostsWithTablesCreated(), s.GetHostsWithTablesCreated())
 				require.Equal(tt, copyTestStatusFrom.GetHostsWithTablesCreated(), s.GetHostsWithTablesCreated())
 				require.Equal(tt, copyTestStatusFrom.GetNormalizedCR(), s.GetNormalizedCR())
 				require.Equal(tt, copyTestStatusFrom.GetNormalizedCRCompleted(), s.GetNormalizedCRCompleted())
