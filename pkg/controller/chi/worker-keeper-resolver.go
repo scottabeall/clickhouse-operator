@@ -12,38 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Worker-side keeper-ref resolution.
+//
+// This file holds methods on *worker that drive the reconcile-time keeper-ref resolution:
+// waiting for the referenced CHK to be ready, then invoking the pure Controller-level
+// resolver and appending the resolved endpoints into the CHI's ZookeeperConfig.
+//
+// Pure Controller-level resolvers live in controller-keeper-resolver.go.
+
 package chi
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"sort"
 	"time"
 
 	core "k8s.io/api/core/v1"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	log "github.com/altinity/clickhouse-operator/pkg/announcer"
-	chkApi "github.com/altinity/clickhouse-operator/pkg/apis/clickhouse-keeper.altinity.com/v1"
 	api "github.com/altinity/clickhouse-operator/pkg/apis/clickhouse.altinity.com/v1"
 	"github.com/altinity/clickhouse-operator/pkg/apis/common/types"
 	"github.com/altinity/clickhouse-operator/pkg/chop"
-	"github.com/altinity/clickhouse-operator/pkg/controller"
 	"github.com/altinity/clickhouse-operator/pkg/controller/common/poller"
-	"github.com/altinity/clickhouse-operator/pkg/interfaces"
-	chkNamer "github.com/altinity/clickhouse-operator/pkg/model/chk/namer"
-	chkLabeler "github.com/altinity/clickhouse-operator/pkg/model/chk/tags/labeler"
-	commonLabeler "github.com/altinity/clickhouse-operator/pkg/model/common/tags/labeler"
-)
-
-var (
-	// ErrKeeperRefResolve indicates a failure to resolve a keeper reference (e.g., service not found).
-	ErrKeeperRefResolve = errors.New("failed to resolve keeper ref")
-	// ErrKeeperRefNoNodes indicates a keeper reference resolved successfully but produced zero nodes.
-	ErrKeeperRefNoNodes = errors.New("keeper ref resolved to 0 nodes")
-	// ErrKeeperNotReady indicates the referenced keeper's pods are not all Running yet.
-	ErrKeeperNotReady = errors.New("keeper not ready")
 )
 
 // resolveAllKeeperReferences resolves all keeper references in the CHI spec to ZooKeeper nodes.
@@ -60,33 +50,29 @@ var (
 //   - If a cluster has ANY zookeeper config (own keeper ref or own nodes) → top-level is ignored
 //     for that cluster (InheritZookeeperFrom returns early when cluster.Zookeeper is non-empty)
 func (w *worker) resolveAllKeeperReferences(ctx context.Context, cr *api.ClickHouseInstallation) error {
-	// Pass CR's namespace domain pattern to the resolver
+	// Pass CR's namespace domain pattern to the resolver.
+	// resolveKeeperReference is nil-safe (HasKeeper handles nil ZookeeperConfig),
+	// so we can pass the chained getter output directly without a pre-check.
 	domainPattern := cr.Spec.GetNamespaceDomainPattern()
 
 	// Resolve top-level zookeeper keeper ref into top-level nodes
-	if cr.Spec.Configuration != nil && cr.Spec.Configuration.Zookeeper != nil {
-		if err := w.resolveKeeperReference(ctx, cr.GetNamespace(), domainPattern, cr.Spec.Configuration.Zookeeper); err != nil {
-			return err
-		}
+	if err := w.resolveKeeperReference(ctx, cr.GetNamespace(), domainPattern, cr.Spec.GetConfiguration().GetZookeeper()); err != nil {
+		return err
 	}
 
 	// Resolve each cluster's zookeeper keeper ref into that cluster's own nodes
-	if cr.Spec.Configuration != nil {
-		for i := range cr.Spec.Configuration.Clusters {
-			// Convenience wrapper
-			cluster := cr.Spec.Configuration.Clusters[i]
-			if cluster != nil && cluster.Zookeeper != nil {
-				if err := w.resolveKeeperReference(ctx, cr.GetNamespace(), domainPattern, cluster.Zookeeper); err != nil {
-					return err
-				}
-			}
+	for _, cluster := range cr.Spec.GetConfiguration().GetClusters() {
+		if err := w.resolveKeeperReference(ctx, cr.GetNamespace(), domainPattern, cluster.GetZookeeper()); err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
-// resolveKeeperReference resolves a single KeeperRef into ZookeeperNodes within the given ZookeeperConfig.
+// resolveKeeperReference resolves a single KeeperRef into ZookeeperNodes within the given
+// ZookeeperConfig. Waits for the CHK to be ready before resolving, then appends the resolved
+// nodes to the ZookeeperConfig's Nodes slice.
 func (w *worker) resolveKeeperReference(ctx context.Context, chiNamespace string, domainPattern *types.String, zkc *api.ZookeeperConfig) error {
 	// Sanity check: if no keeper reference, nothing to do
 	if !zkc.HasKeeper() {
@@ -102,55 +88,16 @@ func (w *worker) resolveKeeperReference(ctx context.Context, chiNamespace string
 		return err
 	}
 
-	var nodes api.ZookeeperNodes
-	var err error
-
-	// Resolve keeper to either per-host services or CR-level service nodes based on service type
-	switch keeper.GetServiceType() {
-	case api.KeeperServiceTypeService:
-		nodes, err = w.resolveKeeperByService(ctx, ns, name, domainPattern)
-	case api.KeeperServiceTypeReplicas:
-		nodes, err = w.resolveKeeperByReplicas(ctx, ns, name, domainPattern)
-		if err != nil || len(nodes) == 0 {
-			// Fallback to CR-level service if replica discovery fails
-			log.V(1).Info("Keeper replica discovery failed or returned 0 nodes, falling back to CR service: %v", err)
-			nodes, err = w.resolveKeeperByService(ctx, ns, name, domainPattern)
-		}
-	default:
-		return fmt.Errorf("%w: invalid keeper serviceType %q for %s/%s", ErrKeeperRefResolve, keeper.GetServiceType(), ns, name)
-	}
-
-	// Handle errors
-	switch {
-	case err != nil:
-		return fmt.Errorf("%w %s/%s: %w", ErrKeeperRefResolve, ns, name, err)
-	case len(nodes) == 0:
-		return fmt.Errorf("%w %s/%s", ErrKeeperRefNoNodes, ns, name)
+	nodes, err := w.c.resolveKeeperNodes(ctx, keeper, chiNamespace, domainPattern)
+	if err != nil {
+		return err
 	}
 
 	// Looks good, append resolved nodes to the CHI's ZookeeperConfig
 	log.V(1).Info("Resolved keeper ref %s/%s to %d node(s): %s", ns, name, len(nodes), nodes)
+
 	zkc.Nodes = zkc.Nodes.Append(nodes...)
 	return nil
-}
-
-// chkListOptions builds meta.ListOptions to select all resources belonging to a CHK by name.
-func chkListOptions(name, namespace string) meta.ListOptions {
-	chk := chkApi.NewClickHouseKeeperInstallation(name, namespace)
-	l := chkLabeler.New(chk)
-	return controller.NewListOptions(map[string]string{
-		l.Get(commonLabeler.LabelCRName): name,
-	})
-}
-
-// chkHostServiceListOptions builds meta.ListOptions to select CHK per-host services.
-func chkHostServiceListOptions(name, namespace string) meta.ListOptions {
-	chk := chkApi.NewClickHouseKeeperInstallation(name, namespace)
-	l := chkLabeler.New(chk)
-	return controller.NewListOptions(map[string]string{
-		l.Get(commonLabeler.LabelCRName):  name,
-		l.Get(commonLabeler.LabelService): l.Get(commonLabeler.LabelServiceValueHost),
-	})
 }
 
 const (
@@ -198,55 +145,4 @@ func (w *worker) waitKeeperReady(ctx context.Context, namespace, name string) er
 		return fmt.Errorf("%w %s/%s: %w", ErrKeeperNotReady, namespace, name, err)
 	}
 	return nil
-}
-
-// resolveKeeperByService resolves using the CR-level service (single endpoint).
-func (w *worker) resolveKeeperByService(ctx context.Context, namespace, name string, domainPattern *types.String) (api.ZookeeperNodes, error) {
-	// Find the CHK CR-level service in k8s
-	chk := chkApi.NewClickHouseKeeperInstallation(name, namespace)
-	namer := chkNamer.New()
-	serviceName := namer.Name(interfaces.NameCRService, chk)
-	svc, err := w.c.kube.Service().Get(ctx, namespace, serviceName)
-	if err != nil {
-		return nil, fmt.Errorf("%w: CR service %s/%s: %w", ErrKeeperRefResolve, namespace, serviceName, err)
-	}
-
-	// CHK service found, extract ZK port (with TLS auto-detection) and FQDN
-	portInfo := api.ExtractZKPortInfo(svc.Spec.Ports)
-	fqdn := namer.Name(interfaces.NameCRServiceFQDN, chk, domainPattern)
-
-	return api.NewZookeeperNodes(api.NewZookeeperNodeFromPortInfo(fqdn, portInfo)), nil
-}
-
-// resolveKeeperByReplicas resolves using per-host services (one node per replica).
-// CHK host services are discovered by CHK labeler's LabelCRName and LabelService/LabelServiceValueHost labels.
-func (w *worker) resolveKeeperByReplicas(ctx context.Context, namespace, name string, domainPattern *types.String) (api.ZookeeperNodes, error) {
-	// Discover CHK host services by label selector
-	opts := chkHostServiceListOptions(name, namespace)
-	services, err := w.c.kubeClient.CoreV1().Services(namespace).List(ctx, opts)
-
-	// Handle errors and empty list
-	switch {
-	case err != nil:
-		return nil, fmt.Errorf("%w: host services %s/%s: %w", ErrKeeperRefResolve, namespace, name, err)
-	case len(services.Items) == 0:
-		return nil, fmt.Errorf("%w: host services %s/%s", ErrKeeperRefNoNodes, namespace, name)
-	}
-
-	// We have list of host services, now build ZookeeperNodes
-
-	// Sort for deterministic order
-	sort.Slice(services.Items, func(i, j int) bool {
-		return services.Items[i].Name < services.Items[j].Name
-	})
-
-	namer := chkNamer.New()
-	nodes := make(api.ZookeeperNodes, 0, len(services.Items))
-	for _, svc := range services.Items {
-		portInfo := api.ExtractZKPortInfo(svc.Spec.Ports)
-		fqdn := namer.ServiceFQDN(svc.Name, namespace, domainPattern)
-		nodes = nodes.Append(api.NewZookeeperNodeFromPortInfo(fqdn, portInfo))
-	}
-
-	return nodes, nil
 }
