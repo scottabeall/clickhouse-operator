@@ -87,6 +87,35 @@ func (n ZookeeperNodes) String() string {
 	return strings.Join(n.Servers(), ",")
 }
 
+// Equals reports whether two node lists contain the same set of nodes, ignoring order.
+// Uses ZookeeperNode.Equal() as the element equality. A nil list is treated as an empty set,
+// so nil equals an empty non-nil list.
+func (n ZookeeperNodes) Equals(other ZookeeperNodes) bool {
+	if n.Len() != other.Len() {
+		return false
+	}
+	// For every node in n, require a matching node in other (positions independent).
+	// This is O(n*m); acceptable because node lists are small (~3-7 entries typically).
+	matched := make([]bool, other.Len())
+	for i := range n {
+		found := false
+		for j := range other {
+			if matched[j] {
+				continue
+			}
+			if n[i].Equal(&other[j]) {
+				matched[j] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 // NewZookeeperConfig creates a new empty ZookeeperConfig.
 func NewZookeeperConfig() *ZookeeperConfig {
 	return new(ZookeeperConfig)
@@ -104,6 +133,22 @@ func (zkc *ZookeeperConfig) IsEmpty() bool {
 // HasKeeper returns true if a keeper reference with a non-empty name is specified.
 func (zkc *ZookeeperConfig) HasKeeper() bool {
 	return zkc != nil && zkc.Keeper.HasName()
+}
+
+// GetKeeper returns the keeper reference, nil-safe when ZookeeperConfig itself is nil.
+func (zkc *ZookeeperConfig) GetKeeper() *KeeperRef {
+	if zkc == nil {
+		return nil
+	}
+	return zkc.Keeper
+}
+
+// GetNodes returns the explicit ZooKeeper nodes list, nil-safe when ZookeeperConfig itself is nil.
+func (zkc *ZookeeperConfig) GetNodes() ZookeeperNodes {
+	if zkc == nil {
+		return nil
+	}
+	return zkc.Nodes
 }
 
 // MergeFrom merges ZooKeeper configuration from the provided source.
