@@ -505,6 +505,25 @@
                                                     }
                                                 }
                                             }
+                                        },
+                                        "recovery": {
+                                            "type": "object",
+                                            "properties": {
+                                                "from": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "aborted": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "onPodReady": {
+                                                                    "type": "string",
+                                                                    "enum": ["", "none", "None", "retry", "Retry"]
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 },

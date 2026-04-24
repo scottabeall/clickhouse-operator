@@ -527,6 +527,30 @@ spec:
                                 - "none"
                                 - "Reconcile"
                                 - "reconcile"
+                    recovery:
+                      type: object
+                      description: "Auto-recovery from reconcile failures, scoped by CHI state"
+                      properties:
+                        from:
+                          type: object
+                          description: "Recovery scopes keyed by CHI state being recovered from"
+                          properties:
+                            aborted:
+                              type: object
+                              description: "Recovery from Status=Aborted"
+                              properties:
+                                onPodReady:
+                                  type: string
+                                  description: |
+                                    Reaction when a pod belonging to an Aborted CHI transitions to Ready.
+                                      retry (default) — re-enqueue the CHI for reconcile
+                                      none — do nothing, CHI stays Aborted
+                                  enum:
+                                    - ""
+                                    - "None"
+                                    - "none"
+                                    - "Retry"
+                                    - "retry"
                 annotation:
                   type: object
                   description: "defines which metadata.annotations items will include or exclude during render StatefulSet, Pod, PVC resources"
