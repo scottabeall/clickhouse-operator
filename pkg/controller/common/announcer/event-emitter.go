@@ -60,6 +60,15 @@ const (
 	EventReasonDeleteCompleted        = "DeleteCompleted"
 	EventReasonDeleteFailed           = "DeleteFailed"
 	EventReasonProgressHostsCompleted = "ProgressHostsCompleted"
+
+	// EventReasonAutoRecoveryTriggered fires when the operator auto-recovers a CR whose
+	// reconcile was aborted, on observing a recovery signal (e.g. a pod became Ready).
+	EventReasonAutoRecoveryTriggered = "AutoRecoveryTriggered"
+
+	// EventReasonKeeperUpdateNoEndpointChange fires when the operator observes a referenced
+	// CHK reconcile completing but decides not to trigger a CHI reconcile because the resolved
+	// zookeeper endpoints have not changed.
+	EventReasonKeeperUpdateNoEndpointChange = "KeeperUpdateNoEndpointChange"
 )
 
 type EventEmitter struct {
