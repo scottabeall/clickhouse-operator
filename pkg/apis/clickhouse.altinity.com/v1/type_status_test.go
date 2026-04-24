@@ -175,8 +175,12 @@ func Test_ChiStatus_BasicOperations_SingleStatus_ConcurrencyTest(t *testing.T) {
 				s.PushAction("additional-action") // this may or may not win the race, but the race will be sync
 			},
 			postConditionsVerification: func(tt *testing.T, s *Status) {
+				// Race-dependent outcome.
+				//   - Both pushes survived around CopyFrom: len == len(from.Actions) + 2
+				//   - B's push raced A's CopyFrom (A's push was overwritten): len == len(from.Actions) + 1
+				// In either case, all copy-source actions must be present and at least the
+				// "additional-action" (B's push) is guaranteed to survive.
 				if len(s.GetActions()) == len(copyTestStatusFrom.GetActions())+2 {
-					require.Equal(tt, copyTestStatusFrom.GetActions(), s.GetActions())
 					require.Contains(tt, s.GetActions(), "always-present-action")
 					require.Contains(tt, s.GetActions(), "additional-action")
 					for _, action := range copyTestStatusFrom.GetActions() {
