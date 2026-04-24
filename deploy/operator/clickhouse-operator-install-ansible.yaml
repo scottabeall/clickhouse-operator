@@ -3754,6 +3754,30 @@ spec:
                                 - "none"
                                 - "Reconcile"
                                 - "reconcile"
+                    recovery:
+                      type: object
+                      description: "Auto-recovery from reconcile failures, scoped by CHI state"
+                      properties:
+                        from:
+                          type: object
+                          description: "Recovery scopes keyed by CHI state being recovered from"
+                          properties:
+                            aborted:
+                              type: object
+                              description: "Recovery from Status=Aborted"
+                              properties:
+                                onPodReady:
+                                  type: string
+                                  description: |
+                                    Reaction when a pod belonging to an Aborted CHI transitions to Ready.
+                                      retry (default) — re-enqueue the CHI for reconcile
+                                      none — do nothing, CHI stays Aborted
+                                  enum:
+                                    - ""
+                                    - "None"
+                                    - "none"
+                                    - "Retry"
+                                    - "retry"
                 annotation:
                   type: object
                   description: "defines which metadata.annotations items will include or exclude during render StatefulSet, Pod, PVC resources"
@@ -5488,6 +5512,50 @@ data:
           #   none      — do nothing (default, backward-compatible)
           #   reconcile — trigger CHI reconcile
           # onKeeperResourceUpdate: none
+    
+      ################################################
+      ##
+      ## Auto-recovery from aborted reconcile
+      ##
+      ################################################
+      recovery:
+        # Recovery scopes keyed by CHI state being recovered from.
+        # Each scope contains on<Event>: <action> mappings that apply while the CHI
+        # is in that state. Multi-scope design anticipates future states beyond Aborted
+        # (e.g. Failed, Broken).
+        from:
+          # Recovery from Status=Aborted
+          aborted:
+            # Action when a pod belonging to an Aborted CHI transitions to Ready:
+            #   retry (default) — re-enqueue the CHI for reconcile
+            #   none            — do nothing, CHI stays Aborted
+            onPodReady: retry
+            # Future events (not yet implemented):
+            #   onKeeperReady: retry       — retry when a referenced CHK becomes ready
+            #   onOperatorRestart: retry   — sweep Aborted CHIs on operator startup
+          # Future scopes (not yet implemented):
+          # failed:
+          #   onPodReady: retry
+          # broken:
+          #   onPodReady: retry
+    
+        # Future global policy knobs (not yet implemented) — flat peers of `from`,
+        # apply across all recovery scopes:
+        #
+        # Global kill-switch for auto-recovery:
+        # enabled: true
+        #
+        # Cap on consecutive auto-recovery attempts before giving up:
+        # retries: 5
+        #
+        # Minimum time between auto-recovery attempts for the same CHI:
+        # cooldown: 30s
+        #
+        # Exponential backoff for auto-recovery attempts:
+        # backoff:
+        #   duration: 5s
+        #   factor: 2
+        #   maxDuration: 2m
     
     ################################################
     ##
