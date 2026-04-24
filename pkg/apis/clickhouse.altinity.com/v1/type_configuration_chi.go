@@ -93,6 +93,22 @@ func (c *Configuration) GetSettings() *Settings {
 	return c.Settings
 }
 
+// GetZookeeper returns the ZooKeeper config, nil-safe when Configuration itself is nil.
+func (c *Configuration) GetZookeeper() *ZookeeperConfig {
+	if c == nil {
+		return nil
+	}
+	return c.Zookeeper
+}
+
+// GetClusters returns the slice of clusters, nil-safe when Configuration itself is nil.
+func (c *Configuration) GetClusters() []*Cluster {
+	if c == nil {
+		return nil
+	}
+	return c.Clusters
+}
+
 func (c *Configuration) GetFiles() *Settings {
 	if c == nil {
 		return nil
