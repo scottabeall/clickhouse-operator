@@ -95,6 +95,9 @@ func (a *ChiClusterAddress) SetClusterIndex(index int) {
 }
 
 func (cluster *Cluster) GetName() string {
+	if cluster == nil {
+		return ""
+	}
 	return cluster.Name
 }
 
@@ -107,6 +110,9 @@ func (cluster *Cluster) HasName() bool {
 }
 
 func (c *Cluster) GetZookeeper() *ZookeeperConfig {
+	if c == nil {
+		return nil
+	}
 	return c.Zookeeper
 }
 
@@ -195,30 +201,25 @@ func (cluster *Cluster) SelectSettingsSourceFrom(shard IShard, replica IReplica)
 // InheritZookeeperFrom inherits zookeeper config from CHI
 func (cluster *Cluster) InheritZookeeperFrom(chi *ClickHouseInstallation) {
 	if !cluster.Zookeeper.IsEmpty() {
-		// Has zk config explicitly specified alread
+		// Has zk config explicitly specified already
 		return
 	}
-	if chi.GetSpecT().Configuration == nil {
+	parentZk := chi.GetSpecT().GetConfiguration().GetZookeeper()
+	if parentZk == nil {
 		return
 	}
-	if chi.GetSpecT().Configuration.Zookeeper == nil {
-		return
-	}
-
-	cluster.Zookeeper = cluster.Zookeeper.MergeFrom(chi.GetSpecT().Configuration.Zookeeper, MergeTypeFillEmptyValues)
+	cluster.Zookeeper = cluster.Zookeeper.MergeFrom(parentZk, MergeTypeFillEmptyValues)
 }
 
 // InheritFilesFrom inherits files from CR
 func (cluster *Cluster) InheritFilesFrom(chi *ClickHouseInstallation) {
-	if chi.GetSpecT().Configuration == nil {
-		return
-	}
-	if chi.GetSpecT().Configuration.Files == nil {
+	parentFiles := chi.GetSpecT().GetConfiguration().GetFiles()
+	if parentFiles == nil {
 		return
 	}
 
 	// Propagate host section only
-	cluster.Files = cluster.Files.MergeFromCB(chi.GetSpecT().Configuration.Files, func(path string, _ *Setting) bool {
+	cluster.Files = cluster.Files.MergeFromCB(parentFiles, func(path string, _ *Setting) bool {
 		if section, err := GetSectionFromPath(path); err == nil {
 			if section.Equal(SectionHost) {
 				return true
