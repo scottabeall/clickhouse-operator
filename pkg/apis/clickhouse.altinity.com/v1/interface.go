@@ -79,6 +79,8 @@ type IConfiguration interface {
 	GetQuotas() *Settings
 	GetSettings() *Settings
 	GetFiles() *Settings
+	GetZookeeper() *ZookeeperConfig
+	GetClusters() []*Cluster
 }
 
 type ICustomResourceRuntime interface {
