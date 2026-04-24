@@ -21,6 +21,7 @@ import (
 	"time"
 
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 
 	log "github.com/altinity/clickhouse-operator/pkg/announcer"
 	api "github.com/altinity/clickhouse-operator/pkg/apis/clickhouse.altinity.com/v1"
@@ -406,14 +407,18 @@ func (w *worker) reconcileHostStatefulSet(ctx context.Context, host *api.Host, o
 
 	w.a.V(1).M(host).F().Info("Reconcile host STS: %s. App version: %s", host.GetName(), host.Runtime.Version.Render())
 
-	// Start with force-restart host
-	if w.shouldForceRestartHost(ctx, host) {
-		w.a.V(1).M(host).F().Info("Reconcile host STS force restart: %s", host.GetName())
-		_ = w.hostForceRestart(ctx, host, opts)
-	}
-
 	w.stsReconciler.PrepareHostStatefulSetWithStatus(ctx, host, host.IsStopped())
 	opts = w.prepareStsReconcileOptsWaitSection(host, opts)
+
+	// Start with force-restart host
+	if w.shouldForceRestartHost(ctx, host) {
+		if w.hostRequiresStatefulSetRollout(host) {
+			w.a.V(1).M(host).F().Info("Reconcile host STS skip software restart and roll out StatefulSet: %s", host.GetName())
+		} else {
+			w.a.V(1).M(host).F().Info("Reconcile host STS force restart: %s", host.GetName())
+			_ = w.hostForceRestart(ctx, host, opts)
+		}
+	}
 
 	// We are in place, where we can  reconcile StatefulSet to desired configuration.
 	w.a.V(1).M(host).F().Info("Reconcile host STS: %s. Reconcile StatefulSet", host.GetName())
@@ -436,6 +441,17 @@ func (w *worker) reconcileHostStatefulSet(ctx context.Context, host *api.Host, o
 	}
 
 	return err
+}
+
+func (w *worker) hostRequiresStatefulSetRollout(host *api.Host) bool {
+	cur := host.Runtime.CurStatefulSet
+	desired := host.Runtime.DesiredStatefulSet
+
+	if cur == nil || desired == nil {
+		return true
+	}
+
+	return !apiequality.Semantic.DeepEqual(cur.Spec.Template, desired.Spec.Template)
 }
 
 func (w *worker) hostForceRestart(ctx context.Context, host *api.Host, opts *statefulset.ReconcileOptions) error {

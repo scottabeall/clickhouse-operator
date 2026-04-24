@@ -1086,6 +1086,62 @@ def test_010011_3(self):
 
 
 @TestScenario
+@Name("test_010011_4. Test secret-backed env rollout during upgrade")
+@Requirements(RQ_SRS_026_ClickHouseOperator_Secrets("1.0"))
+def test_010011_4(self):
+    create_shell_namespace_clickhouse_template()
+
+    with Given("a single-node ClickHouseInstallation with no secret-backed env or settings"):
+        kubectl.apply(
+            util.get_full_path("manifests/secret/test-011-4-secret.yaml"),
+        )
+
+        kubectl.create_and_check(
+            manifest="manifests/chi/test-011-4-secrets-upgrade-1.yaml",
+            check={
+                "pod_count": 1,
+                "do_not_delete": 1,
+            },
+        )
+
+    chi = "test-011-4-secrets-upgrade"
+    pod = f"chi-{chi}-default-0-0-0"
+
+    with When("the CHI is updated to add a secret-backed env var and a server setting that reads it via from_env"):
+        kubectl.create_and_check(
+            manifest="manifests/chi/test-011-4-secrets-upgrade-2.yaml",
+            check={
+                "chi_status": "InProgress",
+                "do_not_delete": 1,
+            },
+        )
+
+        with Then("the pod should not enter CrashLoopBackOff while the CHI is reconciling"):
+            chi_status = ""
+            container_status = ""
+            for i in range(75):
+                chi_status = kubectl.get_field("chi", chi, ".status.status")
+                if chi_status in ("Aborted", "Completed"):
+                    break
+                container_status = kubectl.get_field("pod", pod, ".status.containerStatuses[0].state.waiting.reason")
+                print(f"{chi} status={chi_status} pod={pod} waiting_reason={container_status}")
+                assert container_status not in ["CrashLoopBackOff", "Error"], error(
+                    f"{pod} entered {container_status} during secret-backed env rollout"
+                )
+
+                time.sleep(5)
+
+            assert chi_status == "Completed", error(f"{chi} did not complete successfully")
+
+        with And("the secret-backed setting should be applied successfully"):
+            out = clickhouse.query(chi, "select value from system.server_settings where name = 'mark_cache_size'")
+            assert out == "10485760"
+
+    with Finally("I clean up"):
+        delete_test_namespace()
+
+
+@TestScenario
 @Name("test_010012. Test service templates")
 @Requirements(
     RQ_SRS_026_ClickHouseOperator_ServiceTemplates("1.0"),
