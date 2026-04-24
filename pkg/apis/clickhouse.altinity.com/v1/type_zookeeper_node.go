@@ -60,7 +60,10 @@ func (zkNode *ZookeeperNode) Equal(to *ZookeeperNode) bool {
 		return false
 	}
 
-	return zkNode.hostEqual(to) && zkNode.portEqual(to) && zkNode.secureEqual(to) && zkNode.availabilityZoneEqual(to)
+	return zkNode.hostEqual(to) &&
+		zkNode.portEqual(to) &&
+		zkNode.secureEqual(to) &&
+		zkNode.availabilityZoneEqual(to)
 }
 
 func (zkNode *ZookeeperNode) hostEqual(to *ZookeeperNode) bool {
