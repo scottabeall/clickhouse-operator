@@ -46,6 +46,10 @@ func initKeeper(ctx context.Context) error {
 		return err
 	}
 
+	defaultNamespaces := make(map[string]cache.Config)
+	for _, ns := range chop.Config().GetCacheNamespaces() {
+		defaultNamespaces[ns] = cache.Config{}
+	}
 	manager, err = ctrlRuntime.NewManager(ctrlRuntime.GetConfigOrDie(), ctrlRuntime.Options{
 		Scheme: scheme,
 		Cache: cache.Options{
@@ -53,7 +57,7 @@ func initKeeper(ctx context.Context) error {
 			// valid DNS labels, enabling per-namespace cache scoping. Falls back to NamespaceAll when
 			// any watch namespace is a regexp pattern (the controller's Reconcile guard handles filtering
 			// in that case).
-			Namespaces: chop.Config().GetCacheNamespaces(),
+			DefaultNamespaces: defaultNamespaces,
 		},
 	})
 	if err != nil {
