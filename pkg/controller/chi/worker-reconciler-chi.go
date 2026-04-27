@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"time"
 
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	log "github.com/altinity/clickhouse-operator/pkg/announcer"
 	api "github.com/altinity/clickhouse-operator/pkg/apis/clickhouse.altinity.com/v1"
@@ -410,13 +410,22 @@ func (w *worker) reconcileHostStatefulSet(ctx context.Context, host *api.Host, o
 	w.stsReconciler.PrepareHostStatefulSetWithStatus(ctx, host, host.IsStopped())
 	opts = w.prepareStsReconcileOptsWaitSection(host, opts)
 
-	// Start with force-restart host
+	// Start with force-restart host.
+	// If a pod-template rollout is already coming via the StatefulSet reconcile below, skip
+	// the pre-rollout software restart — see hostRequiresStatefulSetRollout for why.
 	if w.shouldForceRestartHost(ctx, host) {
-		if w.hostRequiresStatefulSetRollout(host) {
-			w.a.V(1).M(host).F().Info("Reconcile host STS skip software restart and roll out StatefulSet: %s", host.GetName())
+		if hostRequiresStatefulSetRollout(host) {
+			w.a.V(1).M(host).F().Info("Pod template changed - skipping software restart; StatefulSet rollout will restart the pod. Host: %s", host.GetName())
 		} else {
 			w.a.V(1).M(host).F().Info("Reconcile host STS force restart: %s", host.GetName())
 			_ = w.hostForceRestart(ctx, host, opts)
+			// hostForceRestart's fallback path (hostScaleDown) overwrites DesiredStatefulSet
+			// with a shutdown spec via PrepareHostStatefulSetWithStatus(host, true). If we
+			// don't reset it back to the normal desired spec, the main ReconcileStatefulSet
+			// below would apply the shutdown spec and leave the pod at replicas=0 — breaking
+			// test_010042 (expected Aborted when bad config crashes ClickHouse — actually
+			// stayed Completed because the pod never came back up to crash).
+			w.stsReconciler.PrepareHostStatefulSetWithStatus(ctx, host, host.IsStopped())
 		}
 	}
 
@@ -443,7 +452,41 @@ func (w *worker) reconcileHostStatefulSet(ctx context.Context, host *api.Host, o
 	return err
 }
 
-func (w *worker) hostRequiresStatefulSetRollout(host *api.Host) bool {
+// hostRequiresStatefulSetRollout reports whether the current reconcile introduces a
+// container env-var change that an in-place software restart CANNOT carry. The #1963
+// scenario is adding a secret-backed env var alongside a config setting that reads it via
+// from_env="..." — a software restart brings the SAME pod back with the OLD env (k8s hasn't
+// rolled the template yet), so ClickHouse fails to resolve from_env and crashes. Deferring
+// to the StatefulSet rollout instead lets k8s bring up a fresh pod with the new env.
+//
+// IMPORTANT: do NOT compare the whole PodTemplateSpec via Semantic.DeepEqual. The current
+// StatefulSet fetched from k8s has apiserver-defaulted fields (dnsPolicy, restartPolicy,
+// schedulerName, terminationMessagePath, securityContext{}, containerPort protocol,
+// ConfigMap volume DefaultMode 420, etc.) that the in-memory desired StatefulSet leaves
+// unset. A whole-template Semantic.DeepEqual would treat these as different on every
+// reconcile — falsely skipping the software restart path for config-only changes (e.g.
+// macro substitution in test_010059), which ClickHouse depends on to pick up new settings.
+//
+// We restrict the comparison to Container.Env, which is the ACTUAL signal #1963 describes
+// and which is not subject to apiserver defaulting. Container image changes are already
+// handled upstream by shouldForceRestartHost / isImageChangeRequested. Other template
+// edits (command/args, volumes, probes) would either need their own case here or would
+// go through the normal rolling-update path — not this pre-rollout-restart gate.
+//
+// NOTE: this check intentionally lives outside shouldForceRestartHost because that predicate
+// is also consulted from the exclude-from-cluster path (worker-wait-exclude-include-restart.go)
+// where pod-template-driven restarts still need the host excluded from the load balancer —
+// hiding them from shouldForceRestartHost would suppress that exclusion.
+//
+// Conservative: if either StatefulSet is missing (shouldn't happen after PrepareHostStatefulSetWithStatus
+// ran earlier in reconcileHostStatefulSet, but be defensive), returns true so we prefer the
+// STS rollout path over a potentially-bad software restart.
+//
+// Package-private and pure so it can be unit-tested without constructing a worker/controller.
+func hostRequiresStatefulSetRollout(host *api.Host) bool {
+	if host == nil {
+		return false
+	}
 	cur := host.Runtime.CurStatefulSet
 	desired := host.Runtime.DesiredStatefulSet
 
@@ -451,7 +494,17 @@ func (w *worker) hostRequiresStatefulSetRollout(host *api.Host) bool {
 		return true
 	}
 
-	return !apiequality.Semantic.DeepEqual(cur.Spec.Template, desired.Spec.Template)
+	curContainers := cur.Spec.Template.Spec.Containers
+	desiredContainers := desired.Spec.Template.Spec.Containers
+	if len(curContainers) != len(desiredContainers) {
+		return true
+	}
+	for i := range curContainers {
+		if !apiequality.Semantic.DeepEqual(curContainers[i].Env, desiredContainers[i].Env) {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *worker) hostForceRestart(ctx context.Context, host *api.Host, opts *statefulset.ReconcileOptions) error {
