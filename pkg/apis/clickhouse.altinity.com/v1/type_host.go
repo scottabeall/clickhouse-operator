@@ -57,6 +57,7 @@ type HostSettings struct {
 	Files    *Settings `json:"files,omitempty"               yaml:"files,omitempty"`
 }
 
+// +k8s:deepcopy-gen=false
 type HostRuntime struct {
 	// Internal data
 	Address             HostAddress                `json:"-" yaml:"-"`
@@ -71,6 +72,43 @@ type HostRuntime struct {
 	DesiredStatefulSet *apps.StatefulSet `json:"-" yaml:"-" testdiff:"ignore"`
 
 	cr ICustomResource `json:"-" yaml:"-" testdiff:"ignore"`
+}
+
+func (r *HostRuntime) DeepCopyInto(out *HostRuntime) {
+	*out = *r
+	out.Address = r.Address
+	if r.Version != nil {
+		in, out := &r.Version, &out.Version
+		*out = (*in).DeepCopy()
+	}
+	if r.reconcileAttributes != nil {
+		in, out := &r.reconcileAttributes, &out.reconcileAttributes
+		*out = (*in).DeepCopy()
+	}
+	if r.replicas != nil {
+		in, out := &r.replicas, &out.replicas
+		*out = new(types.Int32)
+		**out = **in
+	}
+	if r.CurStatefulSet != nil {
+		in, out := &r.CurStatefulSet, &out.CurStatefulSet
+		*out = new(apps.StatefulSet)
+		(*in).DeepCopyInto(*out)
+	}
+	if r.DesiredStatefulSet != nil {
+		in, out := &r.DesiredStatefulSet, &out.DesiredStatefulSet
+		*out = new(apps.StatefulSet)
+		(*in).DeepCopyInto(*out)
+	}
+}
+
+func (r *HostRuntime) DeepCopy() *HostRuntime {
+	if r == nil {
+		return nil
+	}
+	out := new(HostRuntime)
+	r.DeepCopyInto(out)
+	return out
 }
 
 func (r *HostRuntime) GetAddress() IHostAddress {

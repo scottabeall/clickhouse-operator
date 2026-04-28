@@ -306,4 +306,5 @@ type IActionPlan interface {
 		shardFunc func(shard IShard),
 		hostFunc func(host *Host),
 	)
+	DeepCopyIActionPlan() IActionPlan
 }

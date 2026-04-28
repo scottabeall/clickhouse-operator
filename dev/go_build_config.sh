@@ -12,10 +12,6 @@ MANIFESTS_ROOT="${SRC_ROOT}/deploy"
 CMD_ROOT="${SRC_ROOT}/cmd"
 # Packages root
 PKG_ROOT="${SRC_ROOT}/pkg"
-# Local temp folder root
-LOCAL_TMP_ROOT="${SRC_ROOT}/tmp"
-# Place where generator should produce code. It will be copied afterwards
-GENERATOR_ROOT="${LOCAL_TMP_ROOT}/generator"
 
 REPO="github.com/altinity/clickhouse-operator"
 
