@@ -35,8 +35,32 @@ type ChiReconcile struct {
 	Runtime ReconcileRuntime `json:"runtime,omitempty" yaml:"runtime,omitempty"`
 	// StatefulSet specifies StatefulSet reconcile settings
 	StatefulSet ReconcileStatefulSet `json:"statefulSet,omitempty" yaml:"statefulSet,omitempty"`
-	// Host specifies host-lever reconcile settings
+	// Host specifies host-level reconcile settings inherited by every cluster's
+	// reconcile.host (each cluster can append/override per-host).
 	Host ReconcileHost `json:"host" yaml:"host"`
+	// Cluster specifies cluster-level reconcile settings inherited by every
+	// cluster's reconcile (each cluster can append/override its own pre/post hooks
+	// via the existing dedup'd merge). Provides a single CHI-level place to define
+	// "every cluster of this CHI does X on reconcile" patterns.
+	// +optional
+	Cluster *ReconcileCluster `json:"cluster,omitempty" yaml:"cluster,omitempty"`
+}
+
+// ReconcileCluster defines CHI-level cluster reconcile defaults that are inherited
+// by every cluster's reconcile section. Currently carries cluster-scope hooks; future
+// cluster-wide reconcile knobs can be added here.
+type ReconcileCluster struct {
+	// Hooks specifies cluster-level pre/post hooks inherited by every cluster.
+	// +optional
+	Hooks *ReconcileHooks `json:"hooks,omitempty" yaml:"hooks,omitempty"`
+}
+
+// GetHooks returns CHI-level cluster hooks, nil-safe when ReconcileCluster itself is nil.
+func (rc *ReconcileCluster) GetHooks() *ReconcileHooks {
+	if rc == nil {
+		return nil
+	}
+	return rc.Hooks
 }
 
 type ClusterReconcile struct {
