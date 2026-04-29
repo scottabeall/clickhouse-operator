@@ -203,3 +203,44 @@ func SlicesIntersect[T comparable](a, b []T) (intersection []T) {
 	}
 	return intersection
 }
+
+// SlicesEqualAsSet reports whether two slices describe the same multiset of
+// elements — same length, same elements with same multiplicities, ANY order.
+// Uses == for element equality (constraint: comparable). For element types that
+// need a custom equality predicate, use SlicesEqualAsSetFunc.
+//
+// O(n*m). Fine for the small lists this is intended for (zookeeper nodes,
+// hook event lists). For larger sets prefer a multiset-map approach at the
+// call site.
+//
+// Nil and empty are equivalent (both have length 0).
+func SlicesEqualAsSet[T comparable](a, b []T) bool {
+	return SlicesEqualAsSetFunc(a, b, func(x, y T) bool { return x == y })
+}
+
+// SlicesEqualAsSetFunc is the closure-driven variant of SlicesEqualAsSet for
+// non-comparable element types or types with custom equality semantics
+// (e.g. structs that expose an Equal method).
+func SlicesEqualAsSetFunc[T any](a, b []T, equal func(x, y T) bool) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	matched := make([]bool, len(b))
+	for _, ae := range a {
+		found := false
+		for j, be := range b {
+			if matched[j] {
+				continue
+			}
+			if equal(ae, be) {
+				matched[j] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
