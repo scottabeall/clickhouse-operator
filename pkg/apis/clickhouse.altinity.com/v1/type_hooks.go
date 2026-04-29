@@ -18,14 +18,177 @@ import (
 	"github.com/altinity/clickhouse-operator/pkg/apis/common/types"
 )
 
+// HookTarget identifies where to execute a cluster-level hook action. Alias of
+// types.String so existing pointer/Value()/MergeFrom semantics work unchanged;
+// the named alias only narrows the field's documented domain to the constants below.
+//
+// Valid values: HookTargetFirstHost (default), HookTargetAllHosts, HookTargetAllShards.
+// Ignored for host-level hooks — they always run on the host being reconciled.
+type HookTarget = types.String
+
+// HookFailurePolicy controls how a hook action's error is propagated. Alias of
+// types.String so existing pointer/Value()/MergeFrom semantics work unchanged.
+//
+// Valid values: HookFailurePolicyFail (default), HookFailurePolicyIgnore.
+type HookFailurePolicy = types.String
+
 const (
 	// HookTargetFirstHost runs the action on cluster.FirstHost() only. Default for cluster hooks.
-	HookTargetFirstHost = "firstHost"
+	HookTargetFirstHost HookTarget = "firstHost"
 	// HookTargetAllHosts runs the action on every host in the cluster.
-	HookTargetAllHosts = "allHosts"
+	HookTargetAllHosts HookTarget = "allHosts"
 	// HookTargetAllShards runs the action on the first replica of each shard.
-	HookTargetAllShards = "allShards"
+	HookTargetAllShards HookTarget = "allShards"
+
+	// HookFailurePolicyFail (default) propagates any hook execution error to the caller.
+	// For pre-hooks this aborts the reconcile / deletion; for post-hooks the error is logged.
+	HookFailurePolicyFail HookFailurePolicy = "Fail"
+	// HookFailurePolicyIgnore swallows hook execution errors with a warning log. Useful for
+	// best-effort drains where a stuck hook should not block deletion of an already-broken host.
+	HookFailurePolicyIgnore HookFailurePolicy = "Ignore"
 )
+
+// NewHookTarget builds a HookTarget value from a plain string. Thin sugar over the
+// alias's underlying type conversion — exists so call sites read intent rather than
+// "is this a generic types.String cast or a typed-domain conversion?".
+func NewHookTarget(s string) HookTarget {
+	return HookTarget(s)
+}
+
+// NewHookFailurePolicy builds a HookFailurePolicy value from a plain string. Sibling
+// of NewHookTarget — see that function for rationale.
+func NewHookFailurePolicy(s string) HookFailurePolicy {
+	return HookFailurePolicy(s)
+}
+
+// GetTarget returns the resolved HookTarget for this action: the explicit value if set,
+// otherwise HookTargetFirstHost (the documented default for cluster-level hooks).
+// Nil-safe.
+func (a *HookAction) GetTarget() HookTarget {
+	if (a == nil) || (a.Target == nil) || !a.Target.HasValue() {
+		return HookTargetFirstHost
+	}
+	return NewHookTarget(a.Target.Value())
+}
+
+// GetFailurePolicy returns the resolved HookFailurePolicy for this action: the explicit
+// value if set, otherwise HookFailurePolicyFail (the documented default).
+// Nil-safe.
+func (a *HookAction) GetFailurePolicy() HookFailurePolicy {
+	if (a == nil) || (a.FailurePolicy == nil) || !a.FailurePolicy.HasValue() {
+		return HookFailurePolicyFail
+	}
+	return NewHookFailurePolicy(a.FailurePolicy.Value())
+}
+
+// HookEvent identifies a specific reconcile lifecycle event that a hook may opt into.
+// A hook with `events: [eventA, eventB]` fires only when the classifier emits at least one
+// of the listed events.
+//
+// Events are grouped into two SCOPES that match the YAML hook nesting:
+//
+//	Host-scope events (Host* prefix) apply to host-level hooks defined at
+//	  spec.reconcile.host.hooks (CHI level, inherited by clusters) — the operator
+//	  evaluates them per host during host reconcile.
+//
+//	Cluster-scope events (Cluster* prefix) apply to cluster-level hooks defined at
+//	  spec.configuration.clusters[N].reconcile.hooks — the operator evaluates them
+//	  once per cluster reconcile, around the host iteration.
+//
+// The two scopes are completely independent. A cluster-level hook listening to a Host*
+// event is rejected at CRD validation time, and vice versa. The shared `Always` event
+// is the only one valid in both scopes.
+type HookEvent string
+
+const (
+	// HookEventAlways unconditionally matches. Valid in BOTH host and cluster scopes.
+	// In practice: fires on every host reconcile (host scope) or every cluster reconcile
+	// (cluster scope), and on the pre-delete sweep on a dying host (host scope).
+	HookEventAlways HookEvent = "Always"
+
+	// --- Host-scope events (spec.reconcile.host.hooks) ---
+
+	// HookEventHostCreate fires on the very first reconcile that creates a host
+	// (host has no ancestor). Best paired with POST hooks: the host's pod is up and SQL
+	// can run. PRE hooks listing only [HostCreate] are silently inert today — pre-hooks
+	// are skipped on first creation because there is no live pod to talk to yet.
+	HookEventHostCreate HookEvent = "HostCreate"
+	// HookEventHostDelete fires on the reconcile that removes a host from the cluster
+	// (host is present in the ancestor spec but absent from the current spec). Emitted
+	// only from the dedicated delete sweep (worker-deleter.go runHostPreDeleteHooks).
+	// Always emitted alongside HookEventHostShutdown.
+	HookEventHostDelete HookEvent = "HostDelete"
+	// HookEventHostUpdate fires on a reconcile that has prior state for the host
+	// (i.e. neither create nor delete). Catch-all for "the host was already there and
+	// is being reconciled again".
+	HookEventHostUpdate HookEvent = "HostUpdate"
+
+	// HookEventHostStart fires when a host transitions from stopped to running
+	// (ancestor was stopped, current is not).
+	HookEventHostStart HookEvent = "HostStart"
+	// HookEventHostStop fires when a host is being stopped (current spec marks it
+	// stopped, regardless of prior state).
+	HookEventHostStop HookEvent = "HostStop"
+
+	// HookEventHostConfigRestart fires when the operator decides this host needs an
+	// in-place software restart for a configuration change to take effect.
+	HookEventHostConfigRestart HookEvent = "HostConfigRestart"
+	// HookEventHostRollout fires when a pod-template change forces a StatefulSet
+	// rollout (e.g. new env var, new image, new volume).
+	HookEventHostRollout HookEvent = "HostRollout"
+
+	// HookEventHostShutdown is an aggregate convenience: fires whenever the pod is
+	// going to be brought down for any reason — Stop, Delete, ConfigRestart, or Rollout.
+	// Use for "before this host's pod goes away, do X" patterns (e.g. swarm leave,
+	// graceful drain).
+	HookEventHostShutdown HookEvent = "HostShutdown"
+
+	// --- Cluster-scope events (spec.configuration.clusters[N].reconcile.hooks) ---
+
+	// HookEventClusterCreate fires on a cluster reconcile where ALL hosts are new
+	// (first time the operator sees the cluster — no host has an ancestor). Best
+	// paired with POST hooks: hosts are up and SQL works.
+	HookEventClusterCreate HookEvent = "ClusterCreate"
+	// HookEventClusterDelete fires on a cluster reconcile that removes the cluster
+	// (cluster present in ancestor, absent in current). Emitted on the deletion path
+	// in the worker-deleter sweep against the dying cluster's hosts.
+	HookEventClusterDelete HookEvent = "ClusterDelete"
+	// HookEventClusterReconcile fires on every cluster reconcile pass that the
+	// operator actually runs against an existing cluster (i.e. at least one host has
+	// prior state). It does NOT mean "cluster spec was modified" — taskID-only
+	// reconciles, scale-ups (where one host has prior state), and ordinary applies
+	// all emit ClusterReconcile. The operator's upstream gates (isGenerationTheSame,
+	// HasReconcileWork) already filter out no-op informer resyncs, so this event
+	// only fires when the operator decided there is work.
+	//
+	// Use ClusterReconcile for "every reconcile pass over the cluster" patterns
+	// (logging, periodic SYSTEM FLUSH LOGS). For "only when something specific
+	// changed" semantics, listen to host-scope events at host-level instead.
+	HookEventClusterReconcile HookEvent = "ClusterReconcile"
+)
+
+// HostScopeEvents is the set of events valid in `events:` lists on host-level hooks
+// (spec.reconcile.host.hooks). The matching CRD enum mirrors this list.
+var HostScopeEvents = []HookEvent{
+	HookEventAlways,
+	HookEventHostCreate,
+	HookEventHostDelete,
+	HookEventHostUpdate,
+	HookEventHostStart,
+	HookEventHostStop,
+	HookEventHostConfigRestart,
+	HookEventHostRollout,
+	HookEventHostShutdown,
+}
+
+// ClusterScopeEvents is the set of events valid in `events:` lists on cluster-level hooks
+// (spec.configuration.clusters[N].reconcile.hooks). The matching CRD enum mirrors this.
+var ClusterScopeEvents = []HookEvent{
+	HookEventAlways,
+	HookEventClusterCreate,
+	HookEventClusterDelete,
+	HookEventClusterReconcile,
+}
 
 // HookAction defines one action to execute at a reconcile lifecycle point.
 // Exactly one of the action type fields must be specified.
@@ -40,30 +203,90 @@ type HookAction struct {
 	// +optional
 	HTTP *HTTPHookAction `json:"http,omitempty" yaml:"http,omitempty"`
 	// Target specifies which host(s) to execute this action on, for cluster-level hooks.
-	// Valid values: "firstHost" (default), "allHosts", "allShards".
-	// Ignored for host-level hooks — always executes on the host being reconciled.
+	// See HookTarget for valid values and defaults.
 	// +optional
-	Target *types.String `json:"target,omitempty" yaml:"target,omitempty"`
+	Target *HookTarget `json:"target,omitempty" yaml:"target,omitempty"`
+	// Events lists the reconcile events that should trigger this action. Required, must
+	// be non-empty. Use "Always" to fire on every reconcile. See HookEvent constants for
+	// the full list. A hook with no matching events on a given reconcile is silently
+	// skipped — no SQL/HTTP/shell call is made.
+	// +kubebuilder:validation:MinItems=1
+	Events []HookEvent `json:"events,omitempty" yaml:"events,omitempty"`
+	// FailurePolicy controls what happens when this action returns an error.
+	// See HookFailurePolicy for valid values and defaults. Behavior matrix:
+	//   Pre-hook with Fail:    error aborts the reconcile / host deletion.
+	//   Pre-hook with Ignore:  error is logged as a warning, reconcile continues.
+	//   Post-hook with Fail:   error short-circuits the post-hook iteration; the outer
+	//                          reconcile path logs the error but does not abort, since
+	//                          post-hooks run after the reconcile work is already done.
+	//   Post-hook with Ignore: error is logged as a warning, the next post-hook still runs.
+	// Useful for best-effort drains on a possibly-broken host (Ignore on a delete pre-hook).
+	// +optional
+	FailurePolicy *HookFailurePolicy `json:"failurePolicy,omitempty" yaml:"failurePolicy,omitempty"`
+}
+
+// ShouldIgnoreFailure reports whether errors from this action should be swallowed with a
+// warning instead of propagated. Default (no value) is to propagate.
+func (a *HookAction) ShouldIgnoreFailure() bool {
+	return a.GetFailurePolicy() == HookFailurePolicyIgnore
+}
+
+// MatchesAnyEvent reports whether this action should fire given the set of events the
+// classifier emitted for the current reconcile. Returns false if the action's On list
+// is empty (which is invalid input, but the runtime treats it as "never fire" — schema
+// validation is the user-facing enforcement point).
+func (a *HookAction) MatchesAnyEvent(fired []HookEvent) bool {
+	if (a == nil) || len(a.Events) == 0 {
+		// HookAction has no events to fire upon - nothing to do.
+		return false
+	}
+
+	// Iterate over the action's desired events.
+	for _, want := range a.Events {
+		// Special case: Always matches — no need to check the emitted events.
+		if want == HookEventAlways {
+			return true
+		}
+
+		// Check if the emitted events contain the desired event.
+		for _, f := range fired {
+			if want == f {
+				return true
+			}
+		}
+	}
+	// No match found — no events to fire upon.
+	return false
 }
 
 // IsEmpty returns true if the action has no recognized type set.
 func (a *HookAction) IsEmpty() bool {
-	return a == nil || (a.SQL == nil && a.Shell == nil && a.HTTP == nil)
+	// No action type specified - HookAction is empty
+	return !a.HasSQL() && !a.HasShell() && !a.HasHTTP()
 }
 
 // HasSQL returns true if the action is a SQL hook.
 func (a *HookAction) HasSQL() bool {
-	return a != nil && a.SQL != nil
+	if a == nil {
+		return false
+	}
+	return a.SQL != nil
 }
 
 // HasShell returns true if the action is a Shell hook.
 func (a *HookAction) HasShell() bool {
-	return a != nil && a.Shell != nil
+	if a == nil {
+		return false
+	}
+	return a.Shell != nil
 }
 
 // HasHTTP returns true if the action is an HTTP hook.
 func (a *HookAction) HasHTTP() bool {
-	return a != nil && a.HTTP != nil
+	if a == nil {
+		return false
+	}
+	return a.HTTP != nil
 }
 
 // SQLHookAction executes SQL queries against ClickHouse.
@@ -120,32 +343,184 @@ func (h *ReconcileHooks) GetPost() []*HookAction {
 
 // IsEmpty returns true if there are no pre or post hooks.
 func (h *ReconcileHooks) IsEmpty() bool {
-	return len(h.GetPre()) == 0 && len(h.GetPost()) == 0
+	return !h.HasPre() && !h.HasPost()
+}
+
+// HasPre returns true if there are any pre-hooks.
+func (h *ReconcileHooks) HasPre() bool {
+	return len(h.GetPre()) > 0
+}
+
+// HasPost returns true if there are any post-hooks.
+func (h *ReconcileHooks) HasPost() bool {
+	return len(h.GetPost()) > 0
 }
 
 // MergeFrom merges hooks from a parent scope.
 // Actions from parent are appended after the receiver's actions (parent runs first, then child).
 func (h *ReconcileHooks) MergeFrom(from *ReconcileHooks) *ReconcileHooks {
+	// No parent hooks to merge from - return the receiver as is.
 	if from == nil {
 		return h
 	}
+
+	// No receiver hooks to merge into - return a deep copy of the parent.
 	if h == nil {
 		return from.DeepCopy()
 	}
+
 	h.Pre = mergeHookActions(h.Pre, from.Pre)
 	h.Post = mergeHookActions(h.Post, from.Post)
+
 	return h
 }
 
 // mergeHookActions appends actions from parent that are not already present in child.
-func mergeHookActions(child, parent []*HookAction) []*HookAction {
-	for _, p := range parent {
-		if p == nil {
+// Idempotent on repeated calls: a parent action whose deep-equal copy is already in
+// the child slice is skipped. This is critical because the operator's normalization
+// pipeline may invoke inheritance multiple times per reconcile (e.g. buildCR calls
+// createTemplatedCR which calls cluster.InheritClusterReconcileFrom, sometimes
+// twice with templates/IPs), and the result is persisted into NormalizedCRCompleted
+// — without dedup, hooks would accumulate across reconciles and fire N times.
+func mergeHookActions(to, from []*HookAction) []*HookAction {
+	for _, src := range from {
+		if src == nil {
 			continue
 		}
-		child = append(child, p.DeepCopy())
+		// If the action is already in the list, skip it.
+		if isHookActionsContains(to, src) {
+			continue
+		}
+		// Action is not in the list - add it.
+		to = append(to, src.DeepCopy())
 	}
-	return child
+
+	return to
+}
+
+// isHookActionsContains reports whether the slice already holds an action equal to
+// the candidate. Equality uses field-by-field comparison via HookAction.Equal.
+func isHookActionsContains(list []*HookAction, candidate *HookAction) bool {
+	for _, item := range list {
+		if item.Equal(candidate) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// Equal reports whether a and other describe the same HookAction. Field-by-field
+// check that respects the nil-pointer semantics of the action subtypes
+// (SQL/Shell/HTTP/Target/FailurePolicy/Events). Used by mergeHookActions to dedup
+// inherited entries; relies on the value-identical clones DeepCopy produces during
+// the inheritance pipeline.
+func (a *HookAction) Equal(other *HookAction) bool {
+	if (a == nil) || (other == nil) {
+		return a == other
+	}
+	if !a.SQL.Equal(other.SQL) {
+		return false
+	}
+	if !a.Shell.Equal(other.Shell) {
+		return false
+	}
+	if !a.HTTP.Equal(other.HTTP) {
+		return false
+	}
+	if !a.Target.Equal(other.Target) {
+		return false
+	}
+	if !a.FailurePolicy.Equal(other.FailurePolicy) {
+		return false
+	}
+	if !eventsEqualAsSet(a.Events, other.Events) {
+		return false
+	}
+	return true
+}
+
+// eventsEqualAsSet reports whether two HookEvent lists describe the same set of
+// events, ignoring order. Same length AND a 1-to-1 match (so duplicates count).
+// Order-insensitive because the runtime fires a hook if ANY of its events match
+// the classifier output — list ordering carries no semantic weight.
+//
+// O(n*m) but events lists are small (typically 1-3 items), so the simple
+// matched-flag pairing is clearer than building a multiset map.
+func eventsEqualAsSet(a, b []HookEvent) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	matched := make([]bool, len(b))
+	for _, ae := range a {
+		found := false
+		for j, be := range b {
+			if matched[j] {
+				continue
+			}
+			if ae == be {
+				matched[j] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+
+	return true
+}
+
+// Equal reports whether a and other describe the same SQLHookAction.
+func (a *SQLHookAction) Equal(other *SQLHookAction) bool {
+	if (a == nil) || (other == nil) {
+		return a == other
+	}
+
+	if len(a.Queries) != len(other.Queries) {
+		return false
+	}
+
+	// Check queries are equal.
+	// Order does matter.
+	for i := range a.Queries {
+		if a.Queries[i] != other.Queries[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
+// Equal reports whether a and other describe the same ShellHookAction.
+func (a *ShellHookAction) Equal(other *ShellHookAction) bool {
+	if (a == nil) || (other == nil) {
+		return a == other
+	}
+
+	if len(a.Command) != len(other.Command) {
+		return false
+	}
+
+	// Check commands are equal.
+	// Order does matter.
+	for i := range a.Command {
+		if a.Command[i] != other.Command[i] {
+			return false
+		}
+	}
+
+	return a.Container.Equal(other.Container)
+}
+
+// Equal reports whether a and other describe the same HTTPHookAction.
+func (a *HTTPHookAction) Equal(other *HTTPHookAction) bool {
+	if (a == nil) || (other == nil) {
+		return a == other
+	}
+
+	return a.URL.Equal(other.URL) && a.Method.Equal(other.Method)
 }
 
 // MergeFrom merges a HookAction from a parent, filling empty fields.
@@ -153,25 +528,39 @@ func (a *HookAction) MergeFrom(from *HookAction) *HookAction {
 	if from == nil {
 		return a
 	}
+
 	if a == nil {
 		return from.DeepCopy()
+
 	}
 	if a.SQL == nil {
 		a.SQL = from.SQL
 	} else if from.SQL != nil {
 		a.SQL.MergeFrom(from.SQL)
 	}
+
 	if a.Shell == nil {
 		a.Shell = from.Shell
 	} else if from.Shell != nil {
 		a.Shell.MergeFrom(from.Shell)
 	}
+
 	if a.HTTP == nil {
 		a.HTTP = from.HTTP
 	} else if from.HTTP != nil {
 		a.HTTP.MergeFrom(from.HTTP)
 	}
+
 	a.Target = a.Target.MergeFrom(from.Target)
+	// Events list is required at the schema level;
+	// fill from parent only if receiver is empty.
+	// Treat as fill-empty-only to preserve child's explicit choice when both are set.
+	if (len(a.Events) == 0) && (len(from.Events) > 0) {
+		a.Events = append([]HookEvent(nil), from.Events...)
+	}
+
+	a.FailurePolicy = a.FailurePolicy.MergeFrom(from.FailurePolicy)
+
 	return a
 }
 
@@ -180,6 +569,7 @@ func (s *SQLHookAction) MergeFrom(from *SQLHookAction) {
 	if from == nil || s == nil {
 		return
 	}
+
 	s.Queries = append(s.Queries, from.Queries...)
 }
 
@@ -188,6 +578,7 @@ func (sh *ShellHookAction) MergeFrom(from *ShellHookAction) {
 	if from == nil || sh == nil {
 		return
 	}
+
 	sh.Command = append(sh.Command, from.Command...)
 	sh.Container = sh.Container.MergeFrom(from.Container)
 }
@@ -197,6 +588,7 @@ func (h *HTTPHookAction) MergeFrom(from *HTTPHookAction) {
 	if from == nil || h == nil {
 		return
 	}
+
 	h.URL = h.URL.MergeFrom(from.URL)
 	h.Method = h.Method.MergeFrom(from.Method)
 }
