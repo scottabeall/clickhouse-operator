@@ -489,12 +489,15 @@ spec:
                                         type: string
                                   target:
                                     type: string
-                                    description: "where to execute hook: firstHost (default), allHosts, allShards"
+                                    description: "where to execute hook: FirstHost (default), AllHosts, AllShards"
                                     enum:
                                       - ""
-                                      - "firstHost"
-                                      - "allHosts"
-                                      - "allShards"
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
                             post:
                               type: array
                               description: "actions to execute after host reconcile"
