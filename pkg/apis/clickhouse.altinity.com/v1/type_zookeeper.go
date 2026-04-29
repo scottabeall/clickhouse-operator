@@ -20,6 +20,7 @@ import (
 	"gopkg.in/d4l3k/messagediff.v1"
 
 	"github.com/altinity/clickhouse-operator/pkg/apis/common/types"
+	"github.com/altinity/clickhouse-operator/pkg/util"
 )
 
 // ZookeeperConfig defines zookeeper section of .spec.configuration.
@@ -91,29 +92,9 @@ func (n ZookeeperNodes) String() string {
 // Uses ZookeeperNode.Equal() as the element equality. A nil list is treated as an empty set,
 // so nil equals an empty non-nil list.
 func (n ZookeeperNodes) Equals(other ZookeeperNodes) bool {
-	if n.Len() != other.Len() {
-		return false
-	}
-	// For every node in n, require a matching node in other (positions independent).
-	// This is O(n*m); acceptable because node lists are small (~3-7 entries typically).
-	matched := make([]bool, other.Len())
-	for i := range n {
-		found := false
-		for j := range other {
-			if matched[j] {
-				continue
-			}
-			if n[i].Equal(&other[j]) {
-				matched[j] = true
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
-	}
-	return true
+	return util.SlicesEqualAsSetFunc(n, other, func(x, y ZookeeperNode) bool {
+		return x.Equal(&y)
+	})
 }
 
 // NewZookeeperConfig creates a new empty ZookeeperConfig.
