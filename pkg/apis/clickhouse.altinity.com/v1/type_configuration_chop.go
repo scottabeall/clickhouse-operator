@@ -229,8 +229,8 @@ func (c OperatorConfigWatchConfiguration) MergeFrom(from OperatorConfigWatchConf
 }
 
 type OperatorConfigWatchNamespaces struct {
-	Include *types.Strings `json:"include" yaml:"include`
-	Exclude *types.Strings `json:"exclude" yaml:"exclude`
+	Include *types.Strings `json:"include" yaml:"include"`
+	Exclude *types.Strings `json:"exclude" yaml:"exclude"`
 }
 
 func (n *OperatorConfigWatchNamespaces) UnmarshalJSON(data []byte) error {
