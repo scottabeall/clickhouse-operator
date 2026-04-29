@@ -34,7 +34,7 @@ func TestHookActionMatchesAnyEvent(t *testing.T) {
 	})
 
 	t.Run("Always matches everything, including empty fired set", func(t *testing.T) {
-		a := &HookAction{Events: []HookEvent{HookEventAlways}}
+		a := &HookAction{Events: []HookEvent{HookEventAny}}
 		require.True(t, a.MatchesAnyEvent(nil))
 		require.True(t, a.MatchesAnyEvent([]HookEvent{HookEventHostUpdate}))
 		require.True(t, a.MatchesAnyEvent([]HookEvent{HookEventHostShutdown, HookEventHostStop}))
