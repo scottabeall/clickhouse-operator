@@ -16,6 +16,7 @@ package v1
 
 import (
 	"github.com/altinity/clickhouse-operator/pkg/apis/common/types"
+	"github.com/altinity/clickhouse-operator/pkg/util"
 )
 
 // HookTarget identifies where to execute a cluster-level hook action. Alias of
@@ -96,15 +97,20 @@ func (a *HookAction) GetFailurePolicy() HookFailurePolicy {
 //	  once per cluster reconcile, around the host iteration.
 //
 // The two scopes are completely independent. A cluster-level hook listening to a Host*
-// event is rejected at CRD validation time, and vice versa. The shared `Always` event
+// event is rejected at CRD validation time, and vice versa. The shared `Any` event
 // is the only one valid in both scopes.
 type HookEvent string
 
 const (
-	// HookEventAlways unconditionally matches. Valid in BOTH host and cluster scopes.
-	// In practice: fires on every host reconcile (host scope) or every cluster reconcile
-	// (cluster scope), and on the pre-delete sweep on a dying host (host scope).
-	HookEventAlways HookEvent = "Always"
+	// HookEventAny is the wildcard event — matches every event the classifier emits.
+	// Valid in BOTH host and cluster scopes. In practice: a hook listening to [Any]
+	// fires on every host reconcile (host scope) or every cluster reconcile (cluster
+	// scope), and on the pre-delete sweep on a dying host (host scope).
+	//
+	// Naming rationale: "Any" describes the matching semantic (any fired event
+	// satisfies the hook). Avoid "Always" — Kubernetes uses that word with a
+	// different temporal meaning (Pod.spec.restartPolicy, imagePullPolicy).
+	HookEventAny HookEvent = "Any"
 
 	// --- Host-scope events (spec.reconcile.host.hooks) ---
 
@@ -170,7 +176,7 @@ const (
 // HostScopeEvents is the set of events valid in `events:` lists on host-level hooks
 // (spec.reconcile.host.hooks). The matching CRD enum mirrors this list.
 var HostScopeEvents = []HookEvent{
-	HookEventAlways,
+	HookEventAny,
 	HookEventHostCreate,
 	HookEventHostDelete,
 	HookEventHostUpdate,
@@ -184,7 +190,7 @@ var HostScopeEvents = []HookEvent{
 // ClusterScopeEvents is the set of events valid in `events:` lists on cluster-level hooks
 // (spec.configuration.clusters[N].reconcile.hooks). The matching CRD enum mirrors this.
 var ClusterScopeEvents = []HookEvent{
-	HookEventAlways,
+	HookEventAny,
 	HookEventClusterCreate,
 	HookEventClusterDelete,
 	HookEventClusterReconcile,
@@ -207,9 +213,9 @@ type HookAction struct {
 	// +optional
 	Target *HookTarget `json:"target,omitempty" yaml:"target,omitempty"`
 	// Events lists the reconcile events that should trigger this action. Required, must
-	// be non-empty. Use "Always" to fire on every reconcile. See HookEvent constants for
-	// the full list. A hook with no matching events on a given reconcile is silently
-	// skipped — no SQL/HTTP/shell call is made.
+	// be non-empty. Use "Any" to fire on every reconcile (wildcard match). See HookEvent
+	// constants for the full list. A hook with no matching events on a given reconcile
+	// is silently skipped — no SQL/HTTP/shell call is made.
 	// +kubebuilder:validation:MinItems=1
 	Events []HookEvent `json:"events,omitempty" yaml:"events,omitempty"`
 	// FailurePolicy controls what happens when this action returns an error.
@@ -235,27 +241,31 @@ func (a *HookAction) ShouldIgnoreFailure() bool {
 // classifier emitted for the current reconcile. Returns false if the action's On list
 // is empty (which is invalid input, but the runtime treats it as "never fire" — schema
 // validation is the user-facing enforcement point).
-func (a *HookAction) MatchesAnyEvent(fired []HookEvent) bool {
-	if (a == nil) || len(a.Events) == 0 {
+func (a *HookAction) MatchesAnyEvent(list []HookEvent) bool {
+	if a == nil {
+		// HookAction is nil - nothing to do.
+		return false
+	}
+	if len(a.Events) == 0 {
 		// HookAction has no events to fire upon - nothing to do.
 		return false
 	}
 
 	// Iterate over the action's desired events.
-	for _, want := range a.Events {
-		// Special case: Always matches — no need to check the emitted events.
-		if want == HookEventAlways {
+	for _, hookActionTriggeredByEvent := range a.Events {
+		// Special case: Any is the wildcard — matches without consulting the emitted events.
+		if hookActionTriggeredByEvent == HookEventAny {
 			return true
 		}
 
 		// Check if the emitted events contain the desired event.
-		for _, f := range fired {
-			if want == f {
+		for _, curEvent := range list {
+			if hookActionTriggeredByEvent == curEvent {
 				return true
 			}
 		}
 	}
-	// No match found — no events to fire upon.
+	// No match found
 	return false
 }
 
@@ -434,41 +444,11 @@ func (a *HookAction) Equal(other *HookAction) bool {
 	if !a.FailurePolicy.Equal(other.FailurePolicy) {
 		return false
 	}
-	if !eventsEqualAsSet(a.Events, other.Events) {
+	// Events list is order-insensitive — the runtime fires a hook if ANY of its
+	// events match the classifier output, so the list is semantically a multiset.
+	if !util.SlicesEqualAsSet(a.Events, other.Events) {
 		return false
 	}
-	return true
-}
-
-// eventsEqualAsSet reports whether two HookEvent lists describe the same set of
-// events, ignoring order. Same length AND a 1-to-1 match (so duplicates count).
-// Order-insensitive because the runtime fires a hook if ANY of its events match
-// the classifier output — list ordering carries no semantic weight.
-//
-// O(n*m) but events lists are small (typically 1-3 items), so the simple
-// matched-flag pairing is clearer than building a multiset map.
-func eventsEqualAsSet(a, b []HookEvent) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	matched := make([]bool, len(b))
-	for _, ae := range a {
-		found := false
-		for j, be := range b {
-			if matched[j] {
-				continue
-			}
-			if ae == be {
-				matched[j] = true
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
-	}
-
 	return true
 }
 
@@ -566,7 +546,7 @@ func (a *HookAction) MergeFrom(from *HookAction) *HookAction {
 
 // MergeFrom merges SQL hook from parent, appending queries.
 func (s *SQLHookAction) MergeFrom(from *SQLHookAction) {
-	if from == nil || s == nil {
+	if (from == nil) || (s == nil) {
 		return
 	}
 
@@ -575,7 +555,7 @@ func (s *SQLHookAction) MergeFrom(from *SQLHookAction) {
 
 // MergeFrom merges Shell hook from parent, appending commands and filling empty container.
 func (sh *ShellHookAction) MergeFrom(from *ShellHookAction) {
-	if from == nil || sh == nil {
+	if (from == nil) || (sh == nil) {
 		return
 	}
 
@@ -585,7 +565,7 @@ func (sh *ShellHookAction) MergeFrom(from *ShellHookAction) {
 
 // MergeFrom merges HTTP hook from parent, filling empty fields.
 func (h *HTTPHookAction) MergeFrom(from *HTTPHookAction) {
-	if from == nil || h == nil {
+	if (from == nil) || (h == nil) {
 		return
 	}
 
