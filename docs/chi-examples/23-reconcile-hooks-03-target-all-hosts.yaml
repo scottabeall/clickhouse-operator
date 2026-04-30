@@ -1,13 +1,13 @@
-# Reconcile hooks: Cluster hook with target: allHosts
+# Reconcile hooks: Cluster hook with target: AllHosts
 #
 # Some SQL statements (e.g. SYSTEM FLUSH LOGS) do not support the
 # ON CLUSTER clause and must be executed on every host individually.
 #
 # The "target" field on a hook action controls where cluster-level
 # hooks execute:
-#   - firstHost (default): one host, suitable for ON CLUSTER queries
-#   - allHosts:            every host in the cluster
-#   - allShards:           first replica of each shard
+#   - FirstHost (default): one host, suitable for ON CLUSTER queries
+#   - AllHosts:            every host in the cluster
+#   - AllShards:           first replica of each shard
 #
 # Here we flush logs on every host after reconcile completes.
 
@@ -25,7 +25,9 @@ spec:
               - sql:
                   queries:
                     - "SYSTEM FLUSH LOGS"
-                target: allHosts
+                target: AllHosts
+                events:
+                  - ClusterReconcile
         layout:
           shardsCount: 2
           replicasCount: 1
