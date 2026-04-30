@@ -35,6 +35,8 @@ type HookTarget = types.String
 // types.String so existing pointer/Value()/MergeFrom semantics work unchanged.
 //
 // Valid values: HookFailurePolicyFail (default), HookFailurePolicyIgnore.
+// Case-insensitive at runtime: "Fail" and "fail" both normalize to
+// HookFailurePolicyFail; "Ignore" and "ignore" both to HookFailurePolicyIgnore.
 type HookFailurePolicy = types.String
 
 const (
@@ -298,10 +300,11 @@ func (a *HookAction) ShouldIgnoreFailure() bool {
 	return a.GetFailurePolicy() == HookFailurePolicyIgnore
 }
 
-// MatchesAnyEvent reports whether this action should fire given the set of events the
-// classifier emitted for the current reconcile. Returns false if the action's On list
-// is empty (which is invalid input, but the runtime treats it as "never fire" — schema
-// validation is the user-facing enforcement point).
+// MatchesAnyEvent reports whether this action should fire given the set of events
+// that fired during the current reconcile (produced by firedHostEvents /
+// firedClusterEvents). Returns false if the action's Events list is empty (which
+// is invalid input, but the runtime treats it as "never fire" — schema validation
+// is the user-facing enforcement point).
 func (a *HookAction) MatchesAnyEvent(list []HookEvent) bool {
 	if a == nil {
 		// HookAction is nil - nothing to do.
@@ -430,7 +433,9 @@ func (h *ReconcileHooks) HasPost() bool {
 }
 
 // MergeFrom merges hooks from a parent scope.
-// Actions from parent are appended after the receiver's actions (parent runs first, then child).
+// Actions from parent are appended AFTER the receiver's own actions, so iteration
+// order at execution time is: child's actions first, then parent's. Parent actions
+// already present in the child (per HookAction.Equal) are skipped.
 func (h *ReconcileHooks) MergeFrom(from *ReconcileHooks) *ReconcileHooks {
 	// No parent hooks to merge from - return the receiver as is.
 	if from == nil {
@@ -501,10 +506,13 @@ func (a *HookAction) Equal(other *HookAction) bool {
 	if !a.HTTP.Equal(other.HTTP) {
 		return false
 	}
-	if !a.Target.Equal(other.Target) {
+	// Target and FailurePolicy are normalized at runtime (case-insensitive), so dedup
+	// must use EqualFold here too — otherwise "FirstHost" and "firsthost" or
+	// "Fail" and "fail" would be treated as distinct hooks during inheritance merge.
+	if !a.Target.EqualFold(other.Target) {
 		return false
 	}
-	if !a.FailurePolicy.Equal(other.FailurePolicy) {
+	if !a.FailurePolicy.EqualFold(other.FailurePolicy) {
 		return false
 	}
 	// Events list is order-insensitive AND case-insensitive — runtime matching uses
