@@ -15,6 +15,8 @@
 package v1
 
 import (
+	"strings"
+
 	"github.com/altinity/clickhouse-operator/pkg/apis/common/types"
 	"github.com/altinity/clickhouse-operator/pkg/util"
 )
@@ -24,7 +26,9 @@ import (
 // the named alias only narrows the field's documented domain to the constants below.
 //
 // Valid values: HookTargetFirstHost (default), HookTargetAllHosts, HookTargetAllShards.
-// Ignored for host-level hooks — they always run on the host being reconciled.
+// Case-insensitive at runtime: "FirstHost" and "firsthost" both normalize to
+// HookTargetFirstHost. Ignored for host-level hooks — they always run on the host
+// being reconciled.
 type HookTarget = types.String
 
 // HookFailurePolicy controls how a hook action's error is propagated. Alias of
@@ -35,11 +39,11 @@ type HookFailurePolicy = types.String
 
 const (
 	// HookTargetFirstHost runs the action on cluster.FirstHost() only. Default for cluster hooks.
-	HookTargetFirstHost HookTarget = "firstHost"
+	HookTargetFirstHost HookTarget = "FirstHost"
 	// HookTargetAllHosts runs the action on every host in the cluster.
-	HookTargetAllHosts HookTarget = "allHosts"
+	HookTargetAllHosts HookTarget = "AllHosts"
 	// HookTargetAllShards runs the action on the first replica of each shard.
-	HookTargetAllShards HookTarget = "allShards"
+	HookTargetAllShards HookTarget = "AllShards"
 
 	// HookFailurePolicyFail (default) propagates any hook execution error to the caller.
 	// For pre-hooks this aborts the reconcile / deletion; for post-hooks the error is logged.
@@ -64,22 +68,63 @@ func NewHookFailurePolicy(s string) HookFailurePolicy {
 
 // GetTarget returns the resolved HookTarget for this action: the explicit value if set,
 // otherwise HookTargetFirstHost (the documented default for cluster-level hooks).
-// Nil-safe.
+// The returned value is NORMALIZED — case variants like "FirstHost" and "firsthost"
+// both map to HookTargetFirstHost, so callers can switch on the typed constants
+// directly with == comparison. Nil-safe.
 func (a *HookAction) GetTarget() HookTarget {
+	//Default value
 	if (a == nil) || (a.Target == nil) || !a.Target.HasValue() {
 		return HookTargetFirstHost
 	}
-	return NewHookTarget(a.Target.Value())
+	// Normalized actual value
+	return normalizeHookTarget(NewHookTarget(a.Target.Value()))
+}
+
+// normalizeHookTarget maps an arbitrarily-cased HookTarget to the canonical PascalCase
+// form (HookTargetFirstHost / HookTargetAllHosts / HookTargetAllShards). Unknown values
+// pass through unchanged so the runtime can surface a clear "unknown target" error
+// rather than silently coercing to the default.
+func normalizeHookTarget(t HookTarget) HookTarget {
+	for _, normalized := range []HookTarget{
+		HookTargetFirstHost,
+		HookTargetAllHosts,
+		HookTargetAllShards,
+	} {
+		if t.EqualFold(&normalized) {
+			return normalized
+		}
+	}
+	return t
 }
 
 // GetFailurePolicy returns the resolved HookFailurePolicy for this action: the explicit
 // value if set, otherwise HookFailurePolicyFail (the documented default).
-// Nil-safe.
+// The returned value is NORMALIZED — case variants like "Fail" and "fail" both
+// map to HookFailurePolicyFail, so callers can compare against the typed constants
+// directly with == comparison. Nil-safe.
 func (a *HookAction) GetFailurePolicy() HookFailurePolicy {
+	// Default value
 	if (a == nil) || (a.FailurePolicy == nil) || !a.FailurePolicy.HasValue() {
 		return HookFailurePolicyFail
 	}
-	return NewHookFailurePolicy(a.FailurePolicy.Value())
+	// Normalized actual value
+	return normalizeHookFailurePolicy(NewHookFailurePolicy(a.FailurePolicy.Value()))
+}
+
+// normalizeHookFailurePolicy maps an arbitrarily-cased HookFailurePolicy to the canonical
+// PascalCase form (HookFailurePolicyFail / HookFailurePolicyIgnore). Unknown values pass
+// through unchanged so the runtime can surface a clear "unknown failurePolicy" error
+// rather than silently coercing to the default.
+func normalizeHookFailurePolicy(p HookFailurePolicy) HookFailurePolicy {
+	for _, normalized := range []HookFailurePolicy{
+		HookFailurePolicyFail,
+		HookFailurePolicyIgnore,
+	} {
+		if p.EqualFold(&normalized) {
+			return normalized
+		}
+	}
+	return p
 }
 
 // HookEvent identifies a specific reconcile lifecycle event that a hook may opt into.
@@ -99,7 +144,23 @@ func (a *HookAction) GetFailurePolicy() HookFailurePolicy {
 // The two scopes are completely independent. A cluster-level hook listening to a Host*
 // event is rejected at CRD validation time, and vice versa. The shared `Any` event
 // is the only one valid in both scopes.
+//
+// Case-insensitive: "Any" and "any", "HostCreate" and "hostcreate" are equivalent
+// at runtime. The CRD enum lists both PascalCase and all-lowercase variants so
+// either form is accepted at apply time. Constants below use canonical PascalCase.
 type HookEvent string
+
+// String returns the underlying string value. Implements fmt.Stringer so HookEvent
+// is printable via %s and avoids ad-hoc string() casts at use sites.
+func (e HookEvent) String() string {
+	return string(e)
+}
+
+// EqualFold reports whether two HookEvent values are equal under
+// case-insensitive comparison (uses strings.EqualFold).
+func (e HookEvent) EqualFold(other HookEvent) bool {
+	return strings.EqualFold(e.String(), other.String())
+}
 
 const (
 	// HookEventAny is the wildcard event — matches every event the classifier emits.
@@ -252,15 +313,17 @@ func (a *HookAction) MatchesAnyEvent(list []HookEvent) bool {
 	}
 
 	// Iterate over the action's desired events.
+	// Comparison is case-insensitive (HookEvent.EqualFold) so the user can write
+	// "Any"/"any" or "HostCreate"/"hostcreate" interchangeably.
 	for _, hookActionTriggeredByEvent := range a.Events {
 		// Special case: Any is the wildcard — matches without consulting the emitted events.
-		if hookActionTriggeredByEvent == HookEventAny {
+		if hookActionTriggeredByEvent.EqualFold(HookEventAny) {
 			return true
 		}
 
 		// Check if the emitted events contain the desired event.
 		for _, curEvent := range list {
-			if hookActionTriggeredByEvent == curEvent {
+			if hookActionTriggeredByEvent.EqualFold(curEvent) {
 				return true
 			}
 		}
@@ -444,9 +507,9 @@ func (a *HookAction) Equal(other *HookAction) bool {
 	if !a.FailurePolicy.Equal(other.FailurePolicy) {
 		return false
 	}
-	// Events list is order-insensitive — the runtime fires a hook if ANY of its
-	// events match the classifier output, so the list is semantically a multiset.
-	if !util.SlicesEqualAsSet(a.Events, other.Events) {
+	// Events list is order-insensitive AND case-insensitive — runtime matching uses
+	// HookEvent.EqualFold, so ["Any"] and ["any"] describe the same hook for dedup.
+	if !util.SlicesEqualAsSetFunc(a.Events, other.Events, HookEvent.EqualFold) {
 		return false
 	}
 	return true
