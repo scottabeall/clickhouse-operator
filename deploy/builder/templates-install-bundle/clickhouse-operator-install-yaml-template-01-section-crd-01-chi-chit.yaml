@@ -682,7 +682,7 @@ spec:
                                     type: string
                                     description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
                                     # Both camelCase and all-lowercase forms are accepted; the
-                                    # runtime canonicalizes via strings.EqualFold (firstHost == firsthost).
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
                                     enum:
                                       - ""
                                       - "FirstHost"
@@ -744,7 +744,7 @@ spec:
                                       Fail (default): error propagates — pre-hook aborts reconcile / host deletion.
                                       Ignore: error is logged and the reconcile continues.
                                     # Both PascalCase and all-lowercase forms are accepted; the
-                                    # runtime canonicalizes via strings.EqualFold (Fail == fail).
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
                                     enum:
                                       - "Fail"
                                       - "fail"
@@ -807,7 +807,7 @@ spec:
                                     type: string
                                     description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
                                     # Both camelCase and all-lowercase forms are accepted; the
-                                    # runtime canonicalizes via strings.EqualFold (firstHost == firsthost).
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
                                     enum:
                                       - ""
                                       - "FirstHost"
@@ -850,7 +850,7 @@ spec:
                                       Controls what happens when this hook returns an error.
                                       Fail (default) propagates the error; Ignore logs a warning and continues.
                                     # Both PascalCase and all-lowercase forms are accepted; the
-                                    # runtime canonicalizes via strings.EqualFold (Fail == fail).
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
                                     enum:
                                       - "Fail"
                                       - "fail"
