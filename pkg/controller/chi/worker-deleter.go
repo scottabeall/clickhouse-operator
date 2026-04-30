@@ -549,14 +549,24 @@ func (w *worker) deleteHost(ctx context.Context, chi *api.ClickHouseInstallation
 
 	// Pre-delete host hooks: run BEFORE we touch the host's k8s objects so the pod is
 	// still up and SQL hooks can drain / de-register it. A pre-delete hook with
-	// failurePolicy=Fail (default) aborts deletion on error — leaves the host in place
-	// for the user to fix and re-reconcile. failurePolicy=Ignore swallows errors.
+	// failurePolicy=Fail (default) aborts deletion — leaves the host in place for the
+	// user to fix and re-reconcile (similar to admission-webhook failurePolicy=Fail).
+	// failurePolicy=Ignore logs a warning and proceeds with deletion.
 	// Unreachable hosts skip hooks with a warning rather than blocking deletion.
+	//
+	// Policy gating happens upstream in runHostHookActions, NOT here:
+	//   - hook succeeds                        → returns nil
+	//   - hook fails + failurePolicy=Ignore    → returns nil (warning logged inside)
+	//   - hook fails + failurePolicy=Fail      → returns the error
+	//   - host unreachable / no hooks defined  → returns nil
+	// So a non-nil err here means the user explicitly opted into "abort deletion on
+	// hook failure" via failurePolicy=Fail; just propagating it suffices.
 	if err := w.runHostPreDeleteHooks(ctx, host); err != nil {
 		w.a.WithEvent(host.GetCR(), a.EventActionDelete, a.EventReasonDeleteFailed).
 			WithError(host.GetCR()).
 			M(host).F().
 			Error("Pre-delete hook failed for host %s/%s: %v", host.Runtime.Address.ClusterName, host.GetName(), err)
+		return err
 	}
 
 	// Each host consists of

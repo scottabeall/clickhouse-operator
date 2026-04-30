@@ -29,61 +29,87 @@ import (
 // also being stopped fires both HostConfigRestart and HostStop, plus the HostShutdown
 // aggregate. A host hook listing any of those in its `events:` field will run.
 //
-// Method on *worker (rather than a pure function) because shouldForceRestartHost needs
-// ctx for pod-status checks. Other predicates (HasAncestor, IsStopped,
-// hostRequiresStatefulSetRollout) are pure but kept here for cohesion.
+// Thin wrapper that resolves all per-host predicates (some need *worker / ctx) and
+// hands the resulting bool tuple to computeFiredHostEventsFromState — the pure
+// event-firing rules, which are unit-tested directly.
 func (w *worker) firedHostEvents(ctx context.Context, host *api.Host) []api.HookEvent {
-	// Do we have a host to check firing events for?
 	if host == nil {
 		return nil
 	}
+	// Cache GetAncestor() — it walks cr.NormalizedCRCompleted.FindCluster.FindShard.FindHost,
+	// which is O(clusters × shards × hosts) per call. HasAncestor() calls GetAncestor()
+	// internally; calling both would double the cost per host per reconcile.
+	ancestor := host.GetAncestor()
+	ancestorIsStopped := false
+	if ancestor != nil {
+		ancestorIsStopped = ancestor.IsStopped()
+	}
+	return computeFiredHostEventsFromState(hostState{
+		hasAncestor:       ancestor != nil,
+		ancestorIsStopped: ancestorIsStopped,
+		isStopped:         host.IsStopped(),
+		forceRestart:      w.shouldForceRestartHost(ctx, host),
+		requiresRollout:   hostRequiresStatefulSetRollout(host),
+	})
+}
 
-	// List of events that fired for this host during the current reconcile.
-	var firedHostEvents []api.HookEvent
+// hostState captures the boolean inputs that determine which HookEvents fire for a
+// host. Decoupling state from the live *api.Host pointer lets unit tests exercise
+// every combination without the cluster/CR plumbing that HasAncestor / IsStopped /
+// shouldForceRestartHost transitively need.
+type hostState struct {
+	hasAncestor       bool // host had prior state (not first creation)
+	ancestorIsStopped bool // ancestor host was marked stopped (only meaningful if hasAncestor)
+	isStopped         bool // current spec marks the host stopped
+	forceRestart      bool // operator decided this host needs an in-place software restart
+	requiresRollout   bool // pod-template change forces a StatefulSet rollout
+}
+
+// computeFiredHostEventsFromState is the pure event-firing logic for a host. Given
+// a hostState tuple it returns the set of HookEvents that fired this reconcile.
+//
+// HostDelete is NOT emitted from this path — by the time the regular reconcile loop
+// reaches a host, that host is part of the current spec. The HostDelete event is
+// emitted from the deletion sweep (firedHostDeleteEvents).
+func computeFiredHostEventsFromState(s hostState) []api.HookEvent {
+	var fired []api.HookEvent
 
 	// Lifecycle: Create when host is new (no ancestor), otherwise Update.
-	// HostDelete is NOT emitted from this path — by the time the regular reconcile
-	// loop reaches a host, that host is part of the current spec. The HostDelete
-	// event is emitted from the deletion sweep (worker-deleter.go runHostPreDeleteHooks),
-	// which has its own dedicated event-set including HostDelete + HostShutdown.
-	if host.HasAncestor() {
-		firedHostEvents = append(firedHostEvents, api.HookEventHostUpdate)
+	if s.hasAncestor {
+		fired = append(fired, api.HookEventHostUpdate)
 	} else {
-		firedHostEvents = append(firedHostEvents, api.HookEventHostCreate)
+		fired = append(fired, api.HookEventHostCreate)
 	}
 
 	// Stop / Start are independent of the lifecycle events above.
-	if host.IsStopped() {
-		// Host is to be stopped in this reconcile.
-		firedHostEvents = append(firedHostEvents, api.HookEventHostStop)
+	if s.isStopped {
+		fired = append(fired, api.HookEventHostStop)
 	}
-	if host.HasAncestor() && host.GetAncestor().IsStopped() && !host.IsStopped() {
-		// Host is to be started in this reconcile.
-		firedHostEvents = append(firedHostEvents, api.HookEventHostStart)
+	if s.hasAncestor && s.ancestorIsStopped && !s.isStopped {
+		fired = append(fired, api.HookEventHostStart)
 	}
 
 	// Restart-class events: the operator decided to take the pod down for either
 	// a software restart or a StatefulSet rollout.
-	if w.shouldForceRestartHost(ctx, host) {
-		firedHostEvents = append(firedHostEvents, api.HookEventHostConfigRestart)
+	if s.forceRestart {
+		fired = append(fired, api.HookEventHostConfigRestart)
 	}
-	if hostRequiresStatefulSetRollout(host) {
-		firedHostEvents = append(firedHostEvents, api.HookEventHostRollout)
+	if s.requiresRollout {
+		fired = append(fired, api.HookEventHostRollout)
 	}
 
 	// Aggregate: "the pod is going down for any reason this reconcile". Useful for
-	// graceful drain / external de-registration patterns (Alex's swarm-leave use case).
-	// HostDelete intentionally not included until that path is wired (see lifecycle
-	// comment above).
-	if util.SliceContainsAny(firedHostEvents,
+	// graceful drain / external de-registration patterns. HostDelete intentionally
+	// not included — it's emitted from the deletion sweep instead.
+	if util.SliceContainsAny(fired,
 		api.HookEventHostStop,
 		api.HookEventHostConfigRestart,
 		api.HookEventHostRollout,
 	) {
-		firedHostEvents = append(firedHostEvents, api.HookEventHostShutdown)
+		fired = append(fired, api.HookEventHostShutdown)
 	}
 
-	return firedHostEvents
+	return fired
 }
 
 // firedClusterEvents returns the set of HookEvents that fired for this cluster

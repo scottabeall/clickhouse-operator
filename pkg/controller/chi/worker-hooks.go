@@ -308,9 +308,14 @@ func (w *worker) runHostPreDeleteHooksOnRemovedHosts(ctx context.Context, cr *ap
 	// Dedup state — one host receives at most one pre-delete hook execution.
 	// Key is composite (cluster/host) because host.GetName() is short ("0-0") and
 	// can collide across clusters of the same CHI; cluster-qualified key is unique.
+	// If Address.ClusterName is empty (Address not fully populated), fall back to
+	// the FQDN-style HostName which is unique even across clusters.
 	handled := map[string]bool{}
 	hostKey := func(host *api.Host) string {
-		return host.Runtime.Address.ClusterName + "/" + host.GetName()
+		if cn := host.Runtime.Address.ClusterName; cn != "" {
+			return cn + "/" + host.GetName()
+		}
+		return host.Runtime.Address.HostName + "/" + host.GetName()
 	}
 
 	// Host function to run the pre-delete hooks on a host.
@@ -363,6 +368,9 @@ func (w *worker) walkOrphanHostsFromCompleted(
 	cr *api.ClickHouseInstallation,
 	f func(host *api.Host) error,
 ) {
+	if cr == nil {
+		return
+	}
 	completed := cr.GetAncestorT()
 	if completed == nil {
 		return
