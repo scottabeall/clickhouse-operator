@@ -204,6 +204,24 @@ func SlicesIntersect[T comparable](a, b []T) (intersection []T) {
 	return intersection
 }
 
+// SliceContainsAny reports whether haystack contains at least one of the needles.
+// Generic variant of "is any of these in that slice"; uses == for element equality
+// (constraint: comparable). For non-comparable element types or custom equality,
+// loop with your own predicate at the call site.
+//
+// Variadic for ergonomic call sites: SliceContainsAny(events, A, B, C).
+// Empty needles → false (nothing to find).
+func SliceContainsAny[T comparable](haystack []T, needles ...T) bool {
+	for _, n := range needles {
+		for _, h := range haystack {
+			if h == n {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // SlicesEqualAsSet reports whether two slices describe the same multiset of
 // elements — same length, same elements with same multiplicities, ANY order.
 // Uses == for element equality (constraint: comparable). For element types that
