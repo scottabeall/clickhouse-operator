@@ -121,6 +121,11 @@ func (w *worker) reconcileCR(ctx context.Context, old, new *api.ClickHouseInstal
 			return nil
 		}
 
+		// Pre-delete hooks for hosts the action plan removed (scale-down). Pods are still
+		// up at this point — clean()'s purge is what tears them down — so SQL hooks can
+		// drain the dying hosts before they go away.
+		w.runHostPreDeleteHooksOnRemovedHosts(ctx, new)
+
 		w.clean(ctx, new)
 		w.addToMonitoring(new)
 		w.waitForIPAddresses(ctx, new)
