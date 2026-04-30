@@ -15,10 +15,14 @@ spec:
           - sql:
               queries:
                 - "SELECT 'host_pre_hook_marker'"
+            events:
+              - HostUpdate
         post:
           - sql:
               queries:
                 - "SELECT 'host_post_hook_marker'"
+            events:
+              - HostUpdate
   configuration:
     clusters:
       - name: default
@@ -28,10 +32,14 @@ spec:
               - sql:
                   queries:
                     - "SELECT 'cluster_pre_hook_marker'"
+                events:
+                  - ClusterReconcile
             post:
               - sql:
                   queries:
                     - "SELECT 'cluster_post_hook_marker'"
+                events:
+                  - ClusterReconcile
         layout:
           shardsCount: 1
           replicasCount: 1

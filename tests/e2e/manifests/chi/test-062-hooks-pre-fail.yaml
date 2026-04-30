@@ -17,6 +17,8 @@ spec:
               - sql:
                   queries:
                     - "SELECT throwIf(1, 'pre_hook_intentional_failure')"
+                events:
+                  - ClusterReconcile
         layout:
           shardsCount: 2
           replicasCount: 1

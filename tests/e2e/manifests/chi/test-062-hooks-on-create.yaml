@@ -11,18 +11,15 @@ spec:
   reconcile:
     host:
       hooks:
-        pre:
-          - sql:
-              queries:
-                - "SELECT 'host_pre_hook_marker'"
-            events:
-              - HostUpdate
+        # Post hook scoped to HostCreate. Should run exactly once on initial host
+        # creation (when the host first becomes available, after pod is up). Should
+        # NOT run on subsequent reconciles where the host already has an ancestor.
         post:
           - sql:
               queries:
-                - "SELECT 'host_post_hook_marker'"
+                - "SELECT 'host_oncreate_hook_marker'"
             events:
-              - HostUpdate
+              - HostCreate
   configuration:
     clusters:
       - name: default

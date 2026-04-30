@@ -17,7 +17,9 @@ spec:
               - sql:
                   queries:
                     - "SELECT 'allhosts_hook_marker'"
-                target: allHosts
+                target: AllHosts
+                events:
+                  - ClusterReconcile
         layout:
           shardsCount: 2
           replicasCount: 1

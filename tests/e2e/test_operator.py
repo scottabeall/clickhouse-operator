@@ -5805,17 +5805,26 @@ def check_operator_logs(markers, since = ""):
 @Name("test_010062. Reconcile hooks")
 @Requirements(RQ_SRS_026_ClickHouseOperator_Create("1.0"))
 def test_010062(self):
-    """Verify reconcile hooks: cluster-level, host-level, combined, target=allHosts, and pre-hook failure.
-    Hooks are skipped on first CHI creation (no live hosts yet), so each step creates the CHI
-    first, then force-reconciles to trigger the hooks."""
+    """Verify reconcile hooks with explicit event targeting (`on:` field).
+
+    Covers:
+      - Combined cluster + host hooks gated on [HostUpdate] — fire on every regular reconcile.
+      - target=AllHosts on cluster pre-hook — runs on each host.
+      - Pre-hook failure aborts reconcile.
+      - events:[HostCreate] — fires once on initial creation, NOT on subsequent reconciles.
+      - events:[HostShutdown] — does NOT fire on no-op reconcile, fires when config change
+        forces a software restart.
+
+    Hooks gated on [HostUpdate] are skipped on first CHI creation (host has no ancestor
+    yet), so steps 1 and 2 force-reconcile after create to actually exercise them."""
     create_shell_namespace_clickhouse_template()
     with Given("I change operator statefullSet timeout"):
         util.apply_operator_config("manifests/chopconf/low-timeout.yaml")
 
     chi = "test-062-hooks"
 
-    # Step 1: Combined cluster + host hooks (covers cluster-only and host-only cases too)
-    with Given("CHI with both cluster and host hooks is created"):
+    # Step 1: Combined cluster + host hooks gated on [HostUpdate].
+    with Given("CHI with both cluster and host hooks (events:[HostUpdate]) is created"):
         kubectl.create_and_check(
             manifest="manifests/chi/test-062-hooks-combined.yaml",
             check={
@@ -5825,7 +5834,7 @@ def test_010062(self):
             },
         )
 
-    with When("Force reconcile to trigger all hooks (skipped on first creation)"):
+    with When("Force reconcile to trigger all [HostUpdate] hooks"):
         kubectl.force_chi_reconcile(chi, "combined-hooks")
 
     with Then("All four hook markers appear in operator logs"):
@@ -5834,8 +5843,8 @@ def test_010062(self):
             "host_pre_hook_marker", "host_post_hook_marker",
         ])
 
-    # Step 2: target=allHosts — scale up to 2 shards using the same CHI name
-    with When("Apply CHI with 2 shards and target=allHosts hook"):
+    # Step 2: target=AllHosts — scale up to 2 shards using the same CHI name.
+    with When("Apply CHI with 2 shards and target=AllHosts hook events:[HostUpdate]"):
         kubectl.create_and_check(
             manifest="manifests/chi/test-062-hooks-allhosts.yaml",
             check={
@@ -5848,7 +5857,7 @@ def test_010062(self):
     with Then("allhosts_hook_marker and 'all hosts' appear in operator logs"):
         check_operator_logs(["allhosts_hook_marker", "Running SQL cluster hook on all hosts"])
 
-    # Step 3: Pre-hook failure aborts reconcile — apply failing hook to existing CHI
+    # Step 3: Pre-hook failure aborts reconcile.
     with When("Apply CHI with a pre-hook that fails"):
         kubectl.apply(
             util.get_full_path("manifests/chi/test-062-hooks-pre-fail.yaml"),
@@ -5856,11 +5865,162 @@ def test_010062(self):
         )
 
     with Then("CHI should eventually abort"):
-        chi_status = kubectl.get_field("chi", chi, ".status.status")
         kubectl.wait_chi_status(chi, "Aborted")
+
+    # Hand off the namespace before exercising the next event-targeting cases — they
+    # need a clean CHI to assert "fired once" / "did not fire" semantics.
+    with When("Delete the previous CHI to start a fresh state for event-targeting cases"):
+        kubectl.delete_chi(chi, ns=current().context.test_namespace, ok_to_fail=True)
+
+    # Step 4: events:[HostCreate] — fires exactly once on initial creation, not on subsequent reconciles.
+    with Given("CHI with host post-hook events:[HostCreate]"):
+        kubectl.create_and_check(
+            manifest="manifests/chi/test-062-hooks-on-create.yaml",
+            check={
+                "apply_templates": {current().context.clickhouse_template},
+                "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
+                "do_not_delete": 1,
+            },
+        )
+
+    create_marker_count_after_create = _operator_log_marker_count("host_oncreate_hook_marker")
+
+    with Then("host_oncreate_hook_marker fired at least once on initial create"):
+        # Presence-only check. The marker string appears multiple times per hook
+        # firing (operator's "Running SQL host hook on ..." line, schemer's per-query
+        # debug logs, etc.) so an exact count would be brittle. The follow-up step
+        # asserts the count does NOT increase on a subsequent regular reconcile —
+        # that's the actual semantic of "fires on HostCreate, not on HostUpdate".
+        assert create_marker_count_after_create >= 1, error(
+            f"events:[HostCreate] hook did not fire on initial create, "
+            f"got count={create_marker_count_after_create}"
+        )
+
+    with When("Force reconcile a CHI that already has an ancestor (HostUpdate event, NOT HostCreate)"):
+        kubectl.force_chi_reconcile(chi, "after-create")
+
+    with Then("host_oncreate_hook_marker count must NOT increase — hook gated on HostCreate is inert post-create"):
+        create_marker_count_after_reconcile = _operator_log_marker_count("host_oncreate_hook_marker")
+        assert create_marker_count_after_reconcile == create_marker_count_after_create, error(
+            f"events:[HostCreate] hook unexpectedly fired on a regular reconcile: "
+            f"before={create_marker_count_after_create} after={create_marker_count_after_reconcile}"
+        )
+
+    with When("Delete the previous CHI to start a fresh state for HostShutdown case"):
+        kubectl.delete_chi(chi, ns=current().context.test_namespace, ok_to_fail=True)
+
+    # Step 5: events:[HostShutdown] — silent on no-op reconcile, fires when config change forces software restart.
+    with Given("CHI with host pre-hook events:[HostShutdown]"):
+        kubectl.create_and_check(
+            manifest="manifests/chi/test-062-hooks-on-shutdown.yaml",
+            check={
+                "apply_templates": {current().context.clickhouse_template},
+                "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
+                "do_not_delete": 1,
+            },
+        )
+
+    shutdown_marker_count_before_noop = _operator_log_marker_count("host_onshutdown_hook_marker")
+
+    with When("Force reconcile with no config change (taskID-only — no shutdown event fires)"):
+        kubectl.force_chi_reconcile(chi, "noop-shutdown-test")
+
+    with Then("host_onshutdown_hook_marker count must NOT increase — no shutdown happened"):
+        shutdown_marker_count_after_noop = _operator_log_marker_count("host_onshutdown_hook_marker")
+        assert shutdown_marker_count_after_noop == shutdown_marker_count_before_noop, error(
+            f"events:[HostShutdown] hook unexpectedly fired on a no-op reconcile: "
+            f"before={shutdown_marker_count_before_noop} after={shutdown_marker_count_after_noop}"
+        )
+
+    with When("Apply CHI with a config change that forces software restart (HostConfigRestart → HostShutdown)"):
+        kubectl.create_and_check(
+            manifest="manifests/chi/test-062-hooks-on-shutdown-2.yaml",
+            check={
+                "do_not_delete": 1,
+            },
+        )
+
+    with Then("host_onshutdown_hook_marker count must increase — HostShutdown fired via HostConfigRestart"):
+        shutdown_marker_count_after_config = _operator_log_marker_count("host_onshutdown_hook_marker")
+        assert shutdown_marker_count_after_config > shutdown_marker_count_after_noop, error(
+            f"events:[HostShutdown] hook did NOT fire on a config-change reconcile: "
+            f"before={shutdown_marker_count_after_noop} after={shutdown_marker_count_after_config}"
+        )
+
+    with When("Delete the previous CHI to start a fresh state for HostDelete case"):
+        kubectl.delete_chi(chi, ns=current().context.test_namespace, ok_to_fail=True)
+
+    # Step 6: events:[HostDelete] — fires only on host removal, not on regular reconciles.
+    # Apply 2-shard CHI first, then 1-shard CHI which deletes shard 1's host.
+    with Given("CHI with 2 shards and a host pre-delete hook events:[HostDelete]"):
+        kubectl.create_and_check(
+            manifest="manifests/chi/test-062-hooks-on-delete-1.yaml",
+            check={
+                "apply_templates": {current().context.clickhouse_template},
+                "object_counts": {"statefulset": 2, "pod": 2, "service": 3},
+                "do_not_delete": 1,
+            },
+        )
+
+    delete_marker_before = _operator_log_marker_count("host_ondelete_hook_marker")
+
+    with Then("host_ondelete_hook_marker count is 0 on initial 2-shard create — no host was deleted"):
+        # The classifier doesn't emit HostDelete on the regular reconcile path; the
+        # delete sweep is the only emitter. So a fresh CHI's create must leave the
+        # marker count at exactly zero.
+        assert delete_marker_before == 0, error(
+            f"events:[HostDelete] hook unexpectedly fired before any host was deleted, "
+            f"got count={delete_marker_before}"
+        )
+
+    with When("Scale down to 1 shard — shard 1's host is deleted, pre-delete hook should fire against it"):
+        kubectl.create_and_check(
+            manifest="manifests/chi/test-062-hooks-on-delete-2.yaml",
+            check={
+                "object_counts": {"statefulset": 1, "pod": 1, "service": 2},
+                "do_not_delete": 1,
+            },
+        )
+
+    with Then("host_ondelete_hook_marker count must increase — pre-delete hook fired against the dying host"):
+        delete_marker_after = _operator_log_marker_count("host_ondelete_hook_marker")
+        assert delete_marker_after > delete_marker_before, error(
+            f"events:[HostDelete] hook did NOT fire on host removal: "
+            f"before={delete_marker_before} after={delete_marker_after}"
+        )
 
     with Finally("I clean up"):
         delete_test_namespace()
+
+
+def _operator_log_marker_count(marker: str) -> int:
+    """Count actual hook firings of a marker across the operator's pod logs.
+
+    A naive `out.count(marker)` overcounts: the marker SQL string appears in operator
+    log lines that aren't hook firings — diff dumps that print the entire CHI spec
+    (including the SQL queries on each Hooks.Pre[N] / Hooks.Post[N] entry) contribute
+    occurrences on every reconcile, regardless of whether the hook actually fired.
+
+    The hook-execution log line is unique to actual firings:
+        "Running SQL host hook on <name>: [<SQL with marker>]"
+        "Running SQL cluster hook on ...: [<SQL with marker>]"
+    We require BOTH "Running SQL" and the marker to appear on the same line.
+    """
+    operator_pod = kubectl.get_operator_pod(ns=current().context.test_namespace)
+    if not operator_pod:
+        return 0
+    out = kubectl.launch(
+        f"logs {operator_pod} -c clickhouse-operator",
+        ns=current().context.test_namespace,
+        ok_to_fail=True,
+    )
+    if not out:
+        return 0
+    count = 0
+    for line in out.splitlines():
+        if "Running SQL " in line and marker in line:
+            count += 1
+    return count
 
 
 @TestScenario
