@@ -67,6 +67,8 @@ jobs:
 
           minikube image load operator.tar
           minikube image load metrics-exporter.tar
+          minikube image ls | grep -F "docker.io/altinity/clickhouse-operator:${CHO_RELEASE}"
+          minikube image ls | grep -F "docker.io/altinity/metrics-exporter:${CHO_RELEASE}"
 
       - name: Deploy prometheus
         run: |
@@ -95,6 +97,9 @@ jobs:
           set +e # disable the "exit on failure"
 
           sudo ln -snvf ~/venv/qa/bin/tfs /bin/tfs
+          export IMAGE_PULL_POLICY="IfNotPresent"
+          echo "  image pull policy: ${IMAGE_PULL_POLICY}"
+          echo
 
           if [[ "${{ github.event.inputs.test_mask }}" != '' ]]
           then
