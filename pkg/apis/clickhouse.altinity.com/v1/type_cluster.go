@@ -328,6 +328,22 @@ func (cluster *Cluster) FirstHost() *Host {
 	return result
 }
 
+// HasRunningHosts reports whether the cluster has any hosts that existed in a previous
+// reconcile (i.e. host has an ancestor). On first CHI creation, hosts have no ancestors —
+// callers that need a live target (e.g. SQL hooks) use this to skip first-creation paths
+// where pods don't exist yet.
+//
+// Approximated by checking only the first host's ancestor flag — sufficient because the
+// reconciler advances all hosts together: either the cluster is brand new (no ancestors
+// anywhere) or it has prior state (at least the first host has one).
+func (cluster *Cluster) HasRunningHosts() bool {
+	firstHost := cluster.FirstHost()
+	if firstHost == nil {
+		return false
+	}
+	return firstHost.HasAncestor()
+}
+
 // WalkShards walks shards
 func (cluster *Cluster) WalkShards(f func(index int, shard IShard) error) []error {
 	if cluster == nil {
