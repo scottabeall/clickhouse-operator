@@ -5198,6 +5198,77 @@ def test_010050(self):
         delete_test_namespace()
 
 
+@TestScenario
+@Name("test_010051. Test ClickHouse metrics exclusion")
+def test_010051(self):
+    create_shell_namespace_clickhouse_template()
+
+    chi_manifest = "manifests/chi/test-051-metrics-exclusion.yaml"
+    chopconf_file = "manifests/chopconf/test-051-chopconf.yaml"
+    chi = yaml_manifest.get_name(util.get_full_path(chi_manifest))
+    operator_namespace = current().context.operator_namespace
+
+    def wait_metrics_state(description, present_patterns=None, absent_patterns=None, max_retries=12):
+        present_patterns = present_patterns or []
+        absent_patterns = absent_patterns or []
+        with Then(description):
+            present_rx = [re.compile(pattern, re.MULTILINE) for pattern in present_patterns]
+            absent_rx = [re.compile(pattern, re.MULTILINE) for pattern in absent_patterns]
+            out = ""
+            for i in range(1, max_retries):
+                operator_pod = kubectl.get_operator_pod()
+                out = util.get_metrics(operator_pod, operator_namespace)
+
+                present = all(rx.search(out) is not None for rx in present_rx)
+                absent  = all(rx.search(out) is None for rx in absent_rx)
+
+                print(f"{present_patterns} present is {present}")
+                print(f"{absent_patterns} absent is {absent}")
+
+                if present and absent:
+                    return out
+
+                retry_sleep(i, 5, "Metrics are not ready")
+            assert False, error("Metrics do not match present/absent patterns")
+
+    with Given("Operator configuration with disabled metric exclusions is installed"):
+        util.apply_operator_config(chopconf_file)
+
+    with Given("CHI is installed"):
+        kubectl.create_and_check(
+            manifest=chi_manifest,
+            check={
+                "pod_count": 1,
+                "apply_templates": {
+                    current().context.clickhouse_template,
+                },
+                "pod_count": 1,
+                "do_not_delete": 1,
+            },
+        )
+
+    cpu_metric_pattern = r"^chi_clickhouse_metric_(OS.*CPU[0-9]+|CPUFrequencyMHz_[0-9]+)\{"
+    version_metric_pattern = r"^chi_clickhouse_metric_VersionInteger.*"
+
+    wait_metrics_state(
+        "CPU-related and VersionInteger ClickHouse metrics should exist when exclusions are disabled",
+        present_patterns=[cpu_metric_pattern, version_metric_pattern],
+    )
+
+    with When("CHOP configuration is deleted to restore default metric exclusions"):
+        kubectl.delete(util.get_full_path(chopconf_file, lookup_in_host=False), operator_namespace)
+        util.restart_operator()
+
+    wait_metrics_state(
+        "CPU-related ClickHouse metrics should disappear while VersionInteger remains when exclusions are enabled",
+        present_patterns=[version_metric_pattern],
+        absent_patterns=[cpu_metric_pattern],
+    )
+
+    with Finally("I clean up"):
+        delete_test_namespace()
+
+
 def check_replication(chi, replicas, token, table = ''):
         cluster = clickhouse.query(chi, "select substitution from system.macros where macro = 'cluster'")
         if table == '':

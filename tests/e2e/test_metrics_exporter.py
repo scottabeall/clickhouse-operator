@@ -29,11 +29,7 @@ def test_metrics_exporter_chi(self):
         with Then(f"metrics-exporter /chi endpoint result should return {expect_result}"):
             for i in range(1, max_retries):
                 # check /metrics for try to refresh monitored instances
-                url_cmd = util.make_http_get_request("127.0.0.1", "8888", "/metrics")
-                kubectl.launch(
-                    f"exec {operator_pod} -c metrics-exporter -- {url_cmd}",
-                    ns=operator_namespace,
-                )
+                util.get_metrics(operator_pod, operator_namespace)
                 # check /chi after refresh monitored instances
                 url_cmd = util.make_http_get_request("127.0.0.1", "8888", "/chi")
                 out = kubectl.launch(
@@ -53,11 +49,7 @@ def test_metrics_exporter_chi(self):
         with Then(f"metrics-exporter /metrics endpoint result should match with {expect_result}"):
             found = 0
             for i in range(1, max_retries):
-                url_cmd = util.make_http_get_request("127.0.0.1", "8888", "/metrics")
-                out = kubectl.launch(
-                    f"exec {operator_pod} -c metrics-exporter -- {url_cmd}",
-                    ns=operator_namespace,
-                )
+                out = util.get_metrics(operator_pod, operator_namespace)
                 found = 0
                 for string, exists in expect_result.items():
                     if exists == (string in out):

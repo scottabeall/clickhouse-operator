@@ -319,6 +319,15 @@
                                         "metrics": {
                                             "type": "object",
                                             "properties": {
+                                                "excludeMetricsRegexp": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "tablesRegexp": {
+                                                    "type": "string"
+                                                },
                                                 "timeouts": {
                                                     "type": "object",
                                                     "properties": {

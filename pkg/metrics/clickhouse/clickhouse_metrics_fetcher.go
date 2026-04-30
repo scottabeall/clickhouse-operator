@@ -142,16 +142,19 @@ const (
 type MetricsFetcher struct {
 	connectionParams *clickhouse.EndpointConnectionParams
 	tablesRegexp     string
+	metricFilter     *metricRegexpFilter
 }
 
 // NewMetricsFetcher creates new clickhouse fetcher object
 func NewMetricsFetcher(
 	endpointConnectionParams *clickhouse.EndpointConnectionParams,
 	tablesRegexp string,
+	metricFilter *metricRegexpFilter,
 ) *MetricsFetcher {
 	return &MetricsFetcher{
 		connectionParams: endpointConnectionParams,
 		tablesRegexp:     tablesRegexp,
+		metricFilter:     metricFilter,
 	}
 }
 
@@ -169,12 +172,24 @@ func (f *MetricsFetcher) buildMetricsTableSource() string {
 	return fmt.Sprintf("merge('system','%s')", f.tablesRegexp)
 }
 
+func (f *MetricsFetcher) buildMetricsSQL() string {
+	metricsSQL := fmt.Sprintf(queryMetricsSQLTemplate, f.buildMetricsTableSource())
+	if !f.metricFilter.hasPatterns() {
+		return metricsSQL
+	}
+
+	return fmt.Sprintf(`
+		SELECT metric, value, description, type
+		FROM (%s)
+		WHERE NOT (%s)
+	`, metricsSQL, f.metricFilter.buildExcludeMetricsWhere())
+}
+
 // getClickHouseQueryMetrics requests metrics data from ClickHouse
 func (f *MetricsFetcher) getClickHouseQueryMetrics(ctx context.Context) (Table, error) {
-	metricsSQL := fmt.Sprintf(queryMetricsSQLTemplate, f.buildMetricsTableSource())
 	return f.clickHouseQueryScanRows(
 		ctx,
-		metricsSQL,
+		f.buildMetricsSQL(),
 		func(rows *sql.Rows, data *Table) error {
 			var metric, value, description, _type string
 			if err := rows.Scan(&metric, &value, &description, &_type); err == nil {
