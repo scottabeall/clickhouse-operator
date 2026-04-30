@@ -547,6 +547,18 @@ func (w *worker) deleteHost(ctx context.Context, chi *api.ClickHouseInstallation
 		return nil
 	}
 
+	// Pre-delete host hooks: run BEFORE we touch the host's k8s objects so the pod is
+	// still up and SQL hooks can drain / de-register it. A pre-delete hook with
+	// failurePolicy=Fail (default) aborts deletion on error — leaves the host in place
+	// for the user to fix and re-reconcile. failurePolicy=Ignore swallows errors.
+	// Unreachable hosts skip hooks with a warning rather than blocking deletion.
+	if err := w.runHostPreDeleteHooks(ctx, host); err != nil {
+		w.a.WithEvent(host.GetCR(), a.EventActionDelete, a.EventReasonDeleteFailed).
+			WithError(host.GetCR()).
+			M(host).F().
+			Error("Pre-delete hook failed for host %s/%s: %v", host.Runtime.Address.ClusterName, host.GetName(), err)
+	}
+
 	// Each host consists of
 	// 1. User-level objects - tables on the host
 	//    We need to delete tables on the host in order to clean Zookeeper data.
