@@ -16,6 +16,7 @@ package chi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -305,19 +306,25 @@ func (w *worker) runHostPreDeleteHooksOnRemovedHosts(ctx context.Context, cr *ap
 	}
 
 	// Dedup state — one host receives at most one pre-delete hook execution.
+	// Key is composite (cluster/host) because host.GetName() is short ("0-0") and
+	// can collide across clusters of the same CHI; cluster-qualified key is unique.
 	handled := map[string]bool{}
+	hostKey := func(host *api.Host) string {
+		return host.Runtime.Address.ClusterName + "/" + host.GetName()
+	}
 
 	// Host function to run the pre-delete hooks on a host.
 	runHooksOnHost := func(host *api.Host) error {
 		if host == nil {
 			return nil
 		}
-		if handled[host.GetName()] {
+		key := hostKey(host)
+		if handled[key] {
 			// Already handled this host.
 			return nil
 		}
 		// Mark this host as handled.
-		handled[host.GetName()] = true
+		handled[key] = true
 
 		// Run the pre-delete hooks on the host.
 		if err := w.runHostPreDeleteHooks(ctx, host); err != nil {
@@ -451,7 +458,11 @@ func (w *worker) runClusterSQLHookAction(ctx context.Context, action *api.HookAc
 
 	case api.HookTargetAllShards:
 		w.a.V(1).M(cluster).F().Info("Running SQL cluster hook on all shards (first replica each): %v", sql.Queries)
-		var firstErr error
+		// Collect ALL shard failures (not just the first) so the caller's failurePolicy
+		// decision is informed by every shard that errored. Without this, two shards
+		// failing would surface as one error and the second silently disappears —
+		// masking the true blast radius of the failure.
+		var shardErrs []error
 		cluster.WalkShards(func(_ int, shard api.IShard) error {
 			chiShard, ok := shard.(*api.ChiShard)
 			if !ok {
@@ -461,12 +472,13 @@ func (w *worker) runClusterSQLHookAction(ctx context.Context, action *api.HookAc
 			if h == nil {
 				return nil
 			}
-			if err := w.ensureClusterSchemer(h).ExecHost(ctx, h, sql.Queries); (err != nil) && (firstErr == nil) {
-				firstErr = err
+			if err := w.ensureClusterSchemer(h).ExecHost(ctx, h, sql.Queries); err != nil {
+				w.a.V(1).M(h).F().Warning("Cluster hook on shard host %s failed: %v", h.GetName(), err)
+				shardErrs = append(shardErrs, fmt.Errorf("shard host %s: %w", h.GetName(), err))
 			}
 			return nil
 		})
-		return firstErr
+		return errors.Join(shardErrs...)
 
 	default: // HookTargetFirstHost or empty
 		firstHost := cluster.FirstHost()
