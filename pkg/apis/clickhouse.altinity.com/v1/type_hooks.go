@@ -218,9 +218,10 @@ const (
 	// (first time the operator sees the cluster — no host has an ancestor). Best
 	// paired with POST hooks: hosts are up and SQL works.
 	HookEventClusterCreate HookEvent = "ClusterCreate"
-	// HookEventClusterDelete fires on a cluster reconcile that removes the cluster
-	// (cluster present in ancestor, absent in current). Emitted on the deletion path
-	// in the worker-deleter sweep against the dying cluster's hosts.
+	// HookEventClusterDelete is reserved for the planned cluster-delete sweep wiring
+	// and is NOT currently emitted by the runtime. A hook listening to [ClusterDelete]
+	// today silently never fires. Will fire on cluster removal once the dedicated
+	// sweep (parallel to firedHostDeleteEvents) is wired up.
 	HookEventClusterDelete HookEvent = "ClusterDelete"
 	// HookEventClusterReconcile fires on every cluster reconcile pass that the
 	// operator actually runs against an existing cluster (i.e. at least one host has
