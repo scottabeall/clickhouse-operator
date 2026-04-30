@@ -234,8 +234,11 @@ func (w *worker) dispatchHostHookAction(ctx context.Context, action *api.HookAct
 // via the schemer.
 //
 // Failure semantics: per-action `failurePolicy` field controls whether errors propagate
-// (Fail, default) or are logged-and-ignored (Ignore). Reconcile-blocking semantics are
-// up to the caller (deleteHost) — if this returns an error, deleteHost aborts deletion.
+// (Fail, default) or are logged-and-ignored (Ignore). What the caller does with the
+// returned error differs by call site:
+//   - deleteHost (full-CHI delete path): returned error aborts host deletion.
+//   - runHostPreDeleteHooksOnRemovedHosts (scale-down + orphan path): returned error
+//     is logged per-host; iteration over remaining hosts continues.
 //
 // Reachability: if the host's pod is unhealthy / unreachable, hooks are skipped with a
 // warning instead of returning an error. This avoids a stuck dying host blocking the
@@ -248,14 +251,11 @@ func (w *worker) dispatchHostHookAction(ctx context.Context, action *api.HookAct
 // removed-hosts walk), so this naturally reads the hooks that were configured when the
 // host existed — even if the user removed the hook field in the current spec.
 func (w *worker) runHostPreDeleteHooks(ctx context.Context, host *api.Host) error {
-	// Do we have any hooks to run?
+	// Do we have any pre-delete hooks to run? (IsEmpty implies len(Pre)==0 too,
+	// but we only care about Pre on this path — Post hooks are not invoked
+	// pre-deletion since the pod won't exist post-deletion.)
 	hooks := host.GetCluster().GetReconcile().Host.GetHooks()
-	if hooks.IsEmpty() {
-		return nil
-	}
-
-	// Do we have any pre-delete hooks to run?
-	if hooks.IsEmpty() || len(hooks.GetPre()) == 0 {
+	if len(hooks.GetPre()) == 0 {
 		return nil
 	}
 
@@ -461,7 +461,7 @@ func (w *worker) runClusterSQLHookAction(ctx context.Context, action *api.HookAc
 			if h == nil {
 				return nil
 			}
-			if err := w.ensureClusterSchemer(h).ExecHost(ctx, h, sql.Queries); err != nil && firstErr == nil {
+			if err := w.ensureClusterSchemer(h).ExecHost(ctx, h, sql.Queries); (err != nil) && (firstErr == nil) {
 				firstErr = err
 			}
 			return nil
