@@ -8,28 +8,28 @@ spec:
       - name: default
         layout:
           shardsCount: 1
-          replicasCount: 1
+          replicasCount: 2 # Add replica
   templates:
     podTemplates:
       - name: slow-start
         spec:
           containers:
             - name: clickhouse-pod
-              image: altinity/clickhouse-server:25.8.16.10001.altinitystable
+              image: altinity/clickhouse-server:25.8.16.10002.altinitystable # Increment version number
               # sleep 90s before starting clickhouse — forces reconcile to time out
               # and abort, but pod becomes Ready shortly after. Operator should
               # auto-recover reconcile once pod is Ready.
               command:
                 - "/bin/bash"
                 - "-c"
-                - "sleep 90 && /entrypoint.sh"
+                - "sleep 60 && /entrypoint.sh"
               livenessProbe:
                 exec:
                   command:
                     - bash
                     - -xc
                     - 'echo 1'
-                initialDelaySeconds: 90
+                initialDelaySeconds: 60
                 timeoutSeconds: 10
   defaults:
     templates:
