@@ -680,12 +680,17 @@ spec:
                                         type: string
                                   target:
                                     type: string
-                                    description: "where to execute hook for cluster-level hooks: firstHost (default), allHosts, allShards"
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
                                     enum:
                                       - ""
-                                      - "firstHost"
-                                      - "allHosts"
-                                      - "allShards"
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
                                   events:
                                     type: array
                                     minItems: 1
@@ -711,25 +716,40 @@ spec:
                                                             alongside HostShutdown.
                                     items:
                                       type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
                                       enum:
                                         - "Any"
+                                        - "any"
                                         - "HostCreate"
+                                        - "hostcreate"
                                         - "HostDelete"
+                                        - "hostdelete"
                                         - "HostUpdate"
+                                        - "hostupdate"
                                         - "HostStart"
+                                        - "hoststart"
                                         - "HostStop"
+                                        - "hoststop"
                                         - "HostConfigRestart"
+                                        - "hostconfigrestart"
                                         - "HostRollout"
+                                        - "hostrollout"
                                         - "HostShutdown"
+                                        - "hostshutdown"
                                   failurePolicy:
                                     type: string
                                     description: |
                                       Controls what happens when this hook returns an error.
                                       Fail (default): error propagates — pre-hook aborts reconcile / host deletion.
                                       Ignore: error is logged and the reconcile continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
                                     enum:
                                       - "Fail"
+                                      - "fail"
                                       - "Ignore"
+                                      - "ignore"
                             post:
                               type: array
                               description: "actions to execute after reconcile"
@@ -785,12 +805,17 @@ spec:
                                         type: string
                                   target:
                                     type: string
-                                    description: "where to execute hook for cluster-level hooks: firstHost (default), allHosts, allShards"
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
                                     enum:
                                       - ""
-                                      - "firstHost"
-                                      - "allHosts"
-                                      - "allShards"
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
                                   events:
                                     type: array
                                     minItems: 1
@@ -808,19 +833,29 @@ spec:
                                         ClusterDelete    - cluster is being removed (delete sweep — wiring follow-up)
                                     items:
                                       type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
                                       enum:
                                         - "Any"
+                                        - "any"
                                         - "ClusterCreate"
+                                        - "clustercreate"
                                         - "ClusterDelete"
+                                        - "clusterdelete"
                                         - "ClusterReconcile"
+                                        - "clusterreconcile"
                                   failurePolicy:
                                     type: string
                                     description: |
                                       Controls what happens when this hook returns an error.
                                       Fail (default) propagates the error; Ignore logs a warning and continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
                                     enum:
                                       - "Fail"
+                                      - "fail"
                                       - "Ignore"
+                                      - "ignore"
                             post:
                               type: array
                               description: "actions to execute after each cluster reconcile"
