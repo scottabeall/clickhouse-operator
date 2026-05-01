@@ -64,6 +64,24 @@ operator:
   # operator.env -- additional environment variables for the clickhouse-operator container in deployment
   # possible format value `[{"name": "SAMPLE", "value": "text"}]`
   env: []
+  # operator.livenessProbe -- optional liveness probe for the clickhouse-operator container
+  # check `kubectl explain pod.spec.containers.livenessProbe` for details
+  # example:
+  #   httpGet:
+  #     path: /metrics
+  #     port: op-metrics
+  #   initialDelaySeconds: 10
+  #   periodSeconds: 10
+  livenessProbe: null
+  # operator.readinessProbe -- optional readiness probe for the clickhouse-operator container
+  # check `kubectl explain pod.spec.containers.readinessProbe` for details
+  # example:
+  #   httpGet:
+  #     path: /metrics
+  #     port: op-metrics
+  #   initialDelaySeconds: 5
+  #   periodSeconds: 5
+  readinessProbe: null
 metrics:
   enabled: true
   image:
@@ -88,6 +106,24 @@ metrics:
   # metrics.env -- additional environment variables for the deployment of metrics-exporter containers
   # possible format value `[{"name": "SAMPLE", "value": "text"}]`
   env: []
+  # metrics.livenessProbe -- optional liveness probe for the metrics-exporter container
+  # check `kubectl explain pod.spec.containers.livenessProbe` for details
+  # example:
+  #   httpGet:
+  #     path: /metrics
+  #     port: ch-metrics
+  #   initialDelaySeconds: 10
+  #   periodSeconds: 10
+  livenessProbe: null
+  # metrics.readinessProbe -- optional readiness probe for the metrics-exporter container
+  # check `kubectl explain pod.spec.containers.readinessProbe` for details
+  # example:
+  #   httpGet:
+  #     path: /metrics
+  #     port: ch-metrics
+  #   initialDelaySeconds: 5
+  #   periodSeconds: 5
+  readinessProbe: null
 # imagePullSecrets -- image pull secret for private images in clickhouse-operator pod
 # possible value format `[{"name":"your-secret-name"}]`,
 # check `kubectl explain pod.spec.imagePullSecrets` for details

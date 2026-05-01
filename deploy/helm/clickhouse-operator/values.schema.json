@@ -694,6 +694,14 @@
                     "description": "additional environment variables for the deployment of metrics-exporter containers possible format value `[{\"name\": \"SAMPLE\", \"value\": \"text\"}]`",
                     "type": "array"
                 },
+                "livenessProbe": {
+                    "description": "optional liveness probe for the metrics-exporter container, check `kubectl explain pod.spec.containers.livenessProbe` for details",
+                    "type": ["object", "null"]
+                },
+                "readinessProbe": {
+                    "description": "optional readiness probe for the metrics-exporter container, check `kubectl explain pod.spec.containers.readinessProbe` for details",
+                    "type": ["object", "null"]
+                },
                 "image": {
                     "type": "object",
                     "properties": {
@@ -738,6 +746,10 @@
                     "description": "additional environment variables for the clickhouse-operator container in deployment possible format value `[{\"name\": \"SAMPLE\", \"value\": \"text\"}]`",
                     "type": "array"
                 },
+                "livenessProbe": {
+                    "description": "optional liveness probe for the clickhouse-operator container, check `kubectl explain pod.spec.containers.livenessProbe` for details",
+                    "type": ["object", "null"]
+                },
                 "image": {
                     "type": "object",
                     "properties": {
@@ -758,6 +770,10 @@
                 "priorityClassName": {
                     "description": "priority class name for the clickhouse-operator deployment, check `kubectl explain pod.spec.priorityClassName` for details",
                     "type": "string"
+                },
+                "readinessProbe": {
+                    "description": "optional readiness probe for the clickhouse-operator container, check `kubectl explain pod.spec.containers.readinessProbe` for details",
+                    "type": ["object", "null"]
                 },
                 "resources": {
                     "description": "custom resource configuration, check `kubectl explain pod.spec.containers.resources` for details",
