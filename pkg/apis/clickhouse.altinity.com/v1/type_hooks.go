@@ -273,9 +273,14 @@ type HookAction struct {
 	// +optional
 	HTTP *HTTPHookAction `json:"http,omitempty" yaml:"http,omitempty"`
 	// Target specifies which host(s) to execute this action on, for cluster-level hooks.
-	// See HookTarget for valid values and defaults.
+	// See HookTarget for valid values and defaults. Field is typed as the underlying
+	// *types.String (rather than *HookTarget) so the deepcopy code generator (gengo v2)
+	// can emit deepcopy code — gengo doesn't handle Go type aliases as struct field
+	// types. Since HookTarget IS a types.String alias, the two are the same type at the
+	// language level — call sites use the typed accessor a.GetTarget() which returns
+	// HookTarget for documentation.
 	// +optional
-	Target *HookTarget `json:"target,omitempty" yaml:"target,omitempty"`
+	Target *types.String `json:"target,omitempty" yaml:"target,omitempty"`
 	// Events lists the reconcile events that should trigger this action. Required, must
 	// be non-empty. Use "Any" to fire on every reconcile (wildcard match). See HookEvent
 	// constants for the full list. A hook with no matching events on a given reconcile
@@ -291,8 +296,10 @@ type HookAction struct {
 	//                          post-hooks run after the reconcile work is already done.
 	//   Post-hook with Ignore: error is logged as a warning, the next post-hook still runs.
 	// Useful for best-effort drains on a possibly-broken host (Ignore on a delete pre-hook).
+	// Field type is *types.String (not *HookFailurePolicy) for the gengo-alias reason
+	// described on Target above. Use a.GetFailurePolicy() for the typed read.
 	// +optional
-	FailurePolicy *HookFailurePolicy `json:"failurePolicy,omitempty" yaml:"failurePolicy,omitempty"`
+	FailurePolicy *types.String `json:"failurePolicy,omitempty" yaml:"failurePolicy,omitempty"`
 }
 
 // ShouldIgnoreFailure reports whether errors from this action should be swallowed with a
