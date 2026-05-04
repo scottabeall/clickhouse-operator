@@ -38,11 +38,22 @@ fi
 
 source "${CODE_GENERATOR_DIR}/kube_codegen.sh"
 
+# gengo v2's package parser logs "W parse.go:769] Making unsupported type entry"
+# for every Go type alias it encounters in the package graph (the standard-library
+# `any`/`reflect.uncommonType` aliases plus our HookTarget/HookFailurePolicy
+# documentation aliases of types.String). The warnings are harmless — gengo doesn't
+# need to emit deepcopy for these because no struct field uses them directly. Drop
+# them on display so the script's output stays focused on actionable errors.
+filter_gengo_noise() {
+    grep -v 'parse.go:769] Making unsupported type entry' >&2 || true
+}
+
 echo ""
 echo "Generate deepcopy helpers for pkg/apis"
 kube::codegen::gen_helpers \
     --boilerplate "${SRC_ROOT}/hack/boilerplate.go.txt" \
-    "${SRC_ROOT}/pkg/apis"
+    "${SRC_ROOT}/pkg/apis" \
+    2> >(filter_gengo_noise)
 
 echo ""
 echo "Generate client code for clickhouse.altinity.com into ${SRC_ROOT}/pkg/client"
@@ -52,4 +63,5 @@ kube::codegen::gen_client \
     --output-dir "${SRC_ROOT}/pkg/client" \
     --output-pkg "${REPO}/pkg/client" \
     --boilerplate "${SRC_ROOT}/hack/boilerplate.go.txt" \
-    "${SRC_ROOT}/pkg/apis"
+    "${SRC_ROOT}/pkg/apis" \
+    2> >(filter_gengo_noise)
