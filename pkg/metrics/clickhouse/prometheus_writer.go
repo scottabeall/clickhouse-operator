@@ -236,7 +236,12 @@ func (w *CHIPrometheusWriter) WriteOKFetch(fetchType string) {
 
 func (w *CHIPrometheusWriter) appendHostLabel(labels map[string]string) map[string]string {
 	return util.MergeStringMapsOverwrite(labels, map[string]string{
-		"hostname": w.host.Hostname,
+		// Strip the trailing dot. WatchedHost.Hostname carries the FQDN with a trailing
+		// dot (added intentionally to bypass ndots:5 DNS search-suffix expansion on the
+		// connection path — see dns-fqdn-fix). The dot must NOT leak into Prometheus
+		// labels: it makes Grafana panels / alert rules ugly and breaks string-equality
+		// matchers across deployments where the dot is or isn't preserved.
+		"hostname": util.NormalizeFQDN(w.host.Hostname),
 	})
 }
 
