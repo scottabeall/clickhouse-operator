@@ -29,6 +29,11 @@ import (
 // Case-insensitive at runtime: "FirstHost" and "firsthost" both normalize to
 // HookTargetFirstHost. Ignored for host-level hooks — they always run on the host
 // being reconciled.
+//
+// gengo v2 emits a noisy "unsupported type" warning when it encounters this alias
+// during package parse. The warning is harmless (deepcopy of *types.String fields
+// uses the underlying type, which has its own DeepCopy). dev/run_code_generator.sh
+// filters these warnings on display.
 type HookTarget = types.String
 
 // HookFailurePolicy controls how a hook action's error is propagated. Alias of
