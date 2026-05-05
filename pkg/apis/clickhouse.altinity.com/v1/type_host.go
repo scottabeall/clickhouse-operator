@@ -74,9 +74,12 @@ type HostRuntime struct {
 	cr ICustomResource `json:"-" yaml:"-" testdiff:"ignore"`
 }
 
+// DeepCopyInto clones HostRuntime by value, deep-copying the heap fields that have
+// their own DeepCopy methods. The unexported `cr ICustomResource` back-pointer is
+// intentionally aliased: it's a pointer back to the owning CR, and the caller is
+// expected to re-bind it via FillCR/SetCR after copying the surrounding tree.
 func (r *HostRuntime) DeepCopyInto(out *HostRuntime) {
 	*out = *r
-	out.Address = r.Address
 	if r.Version != nil {
 		in, out := &r.Version, &out.Version
 		*out = (*in).DeepCopy()

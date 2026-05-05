@@ -30,10 +30,11 @@ import (
 // HookTargetFirstHost. Ignored for host-level hooks — they always run on the host
 // being reconciled.
 //
-// gengo v2 emits a noisy "unsupported type" warning when it encounters this alias
-// during package parse. The warning is harmless (deepcopy of *types.String fields
-// uses the underlying type, which has its own DeepCopy). dev/run_code_generator.sh
-// filters these warnings on display.
+// Codegen note: gengo v2 cannot emit deepcopy for fields typed as a Go alias, so
+// HookAction.Target is declared as *types.String (the underlying type) rather than
+// *HookTarget. Both types are interchangeable at the language level. The associated
+// "unsupported type" warning gengo prints during package parse is filtered out by
+// dev/run_code_generator.sh.
 type HookTarget = types.String
 
 // HookFailurePolicy controls how a hook action's error is propagated. Alias of
@@ -278,12 +279,8 @@ type HookAction struct {
 	// +optional
 	HTTP *HTTPHookAction `json:"http,omitempty" yaml:"http,omitempty"`
 	// Target specifies which host(s) to execute this action on, for cluster-level hooks.
-	// See HookTarget for valid values and defaults. Field is typed as the underlying
-	// *types.String (rather than *HookTarget) so the deepcopy code generator (gengo v2)
-	// can emit deepcopy code — gengo doesn't handle Go type aliases as struct field
-	// types. Since HookTarget IS a types.String alias, the two are the same type at the
-	// language level — call sites use the typed accessor a.GetTarget() which returns
-	// HookTarget for documentation.
+	// See HookTarget for valid values and defaults. Stored as *types.String for codegen
+	// reasons (see HookTarget); use a.GetTarget() for the typed read.
 	// +optional
 	Target *types.String `json:"target,omitempty" yaml:"target,omitempty"`
 	// Events lists the reconcile events that should trigger this action. Required, must
@@ -301,8 +298,7 @@ type HookAction struct {
 	//                          post-hooks run after the reconcile work is already done.
 	//   Post-hook with Ignore: error is logged as a warning, the next post-hook still runs.
 	// Useful for best-effort drains on a possibly-broken host (Ignore on a delete pre-hook).
-	// Field type is *types.String (not *HookFailurePolicy) for the gengo-alias reason
-	// described on Target above. Use a.GetFailurePolicy() for the typed read.
+	// Stored as *types.String for codegen reasons (see HookTarget); use a.GetFailurePolicy().
 	// +optional
 	FailurePolicy *types.String `json:"failurePolicy,omitempty" yaml:"failurePolicy,omitempty"`
 }

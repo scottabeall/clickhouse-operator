@@ -426,6 +426,10 @@ func (ap *ActionPlan) WalkModified(
 	}
 }
 
+// DeepCopyInto is deliberately shallow: ActionPlan is treated as immutable after
+// MakeActionPlan returns (only Walk* readers from here on), and its messagediff.Diff
+// pointers are not safe to deep-copy. Sharing pointers between the source and the
+// copy is acceptable because nobody mutates either side.
 func (ap *ActionPlan) DeepCopyInto(out *ActionPlan) {
 	*out = *ap
 }

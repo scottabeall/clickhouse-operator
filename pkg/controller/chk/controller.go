@@ -148,7 +148,11 @@ func (c *Controller) poll(ctx context.Context, cr api.ICustomResource, f func(c 
 			if apiErrors.IsNotFound(err) {
 				return
 			}
-			log.V(1).Info("poll Get error for %s: %v", cr.GetName(), err)
+			if err != nil {
+				log.V(1).Info("poll Get error for %s: %v", cr.GetName(), err)
+			} else {
+				log.V(1).Info("poll Get returned unexpected type for %s: %T", cr.GetName(), cur)
+			}
 			if util.IsContextDone(ctx) {
 				log.V(1).Info("Poll is aborted. Cr: %s ", cr.GetName())
 				return
