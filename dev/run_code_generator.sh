@@ -45,7 +45,7 @@ source "${CODE_GENERATOR_DIR}/kube_codegen.sh"
 # need to emit deepcopy for these because no struct field uses them directly. Drop
 # them on display so the script's output stays focused on actionable errors.
 filter_gengo_noise() {
-    grep -v 'parse.go:769] Making unsupported type entry' >&2 || true
+    grep -Ev '^W.*parse\.go:[0-9]+\] Making unsupported type entry' >&2 || true
 }
 
 echo ""
