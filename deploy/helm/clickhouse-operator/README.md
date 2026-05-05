@@ -99,6 +99,8 @@ crdHook:
 | metrics.image.registry | string | `""` | optional image registry prefix (e.g. 1234567890.dkr.ecr.us-east-1.amazonaws.com) |
 | metrics.image.repository | string | `"altinity/metrics-exporter"` | image repository |
 | metrics.image.tag | string | `""` | image tag (chart's appVersion value will be used if not set) |
+| metrics.livenessProbe | string | `nil` | optional liveness probe for the metrics-exporter container check `kubectl explain pod.spec.containers.livenessProbe` for details example:   httpGet:     path: /metrics     port: ch-metrics   initialDelaySeconds: 10   periodSeconds: 10 |
+| metrics.readinessProbe | string | `nil` | optional readiness probe for the metrics-exporter container check `kubectl explain pod.spec.containers.readinessProbe` for details example:   httpGet:     path: /metrics     port: ch-metrics   initialDelaySeconds: 5   periodSeconds: 5 |
 | metrics.resources | object | `{}` | custom resource configuration |
 | nameOverride | string | `""` | override name of the chart |
 | namespaceOverride | string | `""` |  |
@@ -109,7 +111,9 @@ crdHook:
 | operator.image.registry | string | `""` | optional image registry prefix (e.g. 1234567890.dkr.ecr.us-east-1.amazonaws.com) |
 | operator.image.repository | string | `"altinity/clickhouse-operator"` | image repository |
 | operator.image.tag | string | `""` | image tag (chart's appVersion value will be used if not set) |
+| operator.livenessProbe | string | `nil` | optional liveness probe for the clickhouse-operator container check `kubectl explain pod.spec.containers.livenessProbe` for details example:   httpGet:     path: /metrics     port: op-metrics   initialDelaySeconds: 10   periodSeconds: 10 |
 | operator.priorityClassName | string | "" | priority class name for the clickhouse-operator deployment, check `kubectl explain pod.spec.priorityClassName` for details |
+| operator.readinessProbe | string | `nil` | optional readiness probe for the clickhouse-operator container check `kubectl explain pod.spec.containers.readinessProbe` for details example:   httpGet:     path: /metrics     port: op-metrics   initialDelaySeconds: 5   periodSeconds: 5 |
 | operator.resources | object | `{}` | custom resource configuration, check `kubectl explain pod.spec.containers.resources` for details |
 | podAnnotations | object | check the `values.yaml` file | annotations to add to the clickhouse-operator pod, check `kubectl explain pod.spec.annotations` for details |
 | podLabels | object | `{}` | labels to add to the clickhouse-operator pod |
