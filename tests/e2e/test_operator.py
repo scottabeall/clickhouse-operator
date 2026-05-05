@@ -5186,9 +5186,8 @@ def test_010050(self):
         operator_pod = kubectl.get_operator_pod()
 
         # chi_clickhouse_metric_VersionInteger{chi="test-050",exclude_this_annotation="test-050-annotation",hostname="chi-test-050-default-0-0.test-050-e1884706-9a94-11ef-a786-367ddacfe5fd.svc.cluster.local",include_this_annotation="test-050-annotation",include_this_label="test-050-label",namespace="test-050-e1884706-9a94-11ef-a786-367ddacfe5fd"}
-        # No trailing dot in hostname label — the FQDN connection path keeps the dot
-        # (DNS perf, ndots:5 bypass) but Prometheus labels are normalized via
-        # util.NormalizeFQDN in appendHostLabel — see CHO-667.
+        # Hostname label has no trailing dot: the FQDN connection path retains it (ndots:5
+        # bypass) but appendHostLabel normalizes via util.NormalizeFQDN before exposing.
         expect_labels = f"chi=\"test-050\",hostname=\"chi-test-050-default-0-0.{operator_namespace}.svc.cluster.local\",include_this_annotation=\"test-050-annotation\",include_this_label=\"test-050-label\""
         check_metrics_monitoring(
             operator_namespace=operator_namespace,
