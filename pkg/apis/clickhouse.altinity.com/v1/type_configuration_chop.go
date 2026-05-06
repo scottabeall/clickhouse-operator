@@ -1389,7 +1389,7 @@ func (c *OperatorConfig) applyDefaultWatchNamespace() {
 
 	if c.Runtime.Namespace == meta.NamespaceSystem {
 		// Operator is running in system namespace
-		// Do nothing, we already have len(config.WatchNamespaces) == 0
+		// Do nothing, Watch.Namespaces.Include is already empty (= watch all)
 	} else {
 		// Operator is running inside a namespace. Watch in it
 		c.Watch.Namespaces.Include = types.NewStrings([]string{
