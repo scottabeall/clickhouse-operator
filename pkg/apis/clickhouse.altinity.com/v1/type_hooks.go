@@ -61,15 +61,12 @@ const (
 	HookFailurePolicyIgnore HookFailurePolicy = "Ignore"
 )
 
-// NewHookTarget builds a HookTarget value from a plain string. Thin sugar over the
-// alias's underlying type conversion — exists so call sites read intent rather than
-// "is this a generic types.String cast or a typed-domain conversion?".
+// NewHookTarget builds a HookTarget value from a plain string.
 func NewHookTarget(s string) HookTarget {
 	return HookTarget(s)
 }
 
-// NewHookFailurePolicy builds a HookFailurePolicy value from a plain string. Sibling
-// of NewHookTarget — see that function for rationale.
+// NewHookFailurePolicy builds a HookFailurePolicy value from a plain string.
 func NewHookFailurePolicy(s string) HookFailurePolicy {
 	return HookFailurePolicy(s)
 }
@@ -279,8 +276,8 @@ type HookAction struct {
 	// +optional
 	HTTP *HTTPHookAction `json:"http,omitempty" yaml:"http,omitempty"`
 	// Target specifies which host(s) to execute this action on, for cluster-level hooks.
-	// See HookTarget for valid values and defaults. Stored as *types.String for codegen
-	// reasons (see HookTarget); use a.GetTarget() for the typed read.
+	// See HookTarget for valid values, defaults, and the *types.String field-type rationale.
+	// Use a.GetTarget() for the typed read.
 	// +optional
 	Target *types.String `json:"target,omitempty" yaml:"target,omitempty"`
 	// Events lists the reconcile events that should trigger this action. Required, must
@@ -298,7 +295,8 @@ type HookAction struct {
 	//                          post-hooks run after the reconcile work is already done.
 	//   Post-hook with Ignore: error is logged as a warning, the next post-hook still runs.
 	// Useful for best-effort drains on a possibly-broken host (Ignore on a delete pre-hook).
-	// Stored as *types.String for codegen reasons (see HookTarget); use a.GetFailurePolicy().
+	// Stored as *types.String for the same codegen reason described on HookTarget; use
+	// a.GetFailurePolicy() for the typed read.
 	// +optional
 	FailurePolicy *types.String `json:"failurePolicy,omitempty" yaml:"failurePolicy,omitempty"`
 }
