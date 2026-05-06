@@ -1,8 +1,8 @@
-## How to upgrade ClickHouse Operator
+# How to upgrade ClickHouse Operator
 
 **Note:** Before you upgrade check releases notes if there are any backward incompatible changes between your version and the latest version.
 
-**Supported upgrade path:** previous minor → current minor (e.g. 0.26 → 0.27). Skipping multiple minor versions is not validated in CI. To upgrade from a much older version, perform incremental minor-version upgrades. For installations running ClickHouse Keeper (CHK) on operator 0.23.x, see the manual PV-migration procedure in [`keeper_migration_from_23_to_24.md`](keeper_migration_from_23_to_24.md) — direct 0.23 → current is no longer covered by CI.
+**Supported upgrade path:** previous minor → current minor (e.g. 0.26 → 0.27). Skipping multiple minor versions is not validated in CI. To upgrade from a much older version, perform incremental minor-version upgrades. For installations running ClickHouse Keeper (CHK) on operator 0.23.x, see the manual PV-migration procedure in [keeper_migration_from_23_to_24.md](./keeper_migration_from_23_to_24.md) — direct 0.23 → current is no longer covered by CI.
 
 ClickHouse operator is deployed as Deployment Kubernetes resource (see: [Operator Installation Guide][operator_installation_details.md] for more details).
 Supplied [clickhouse-operator-install-bundle.yaml][clickhouse-operator-install-bundle.yaml] contains the following deployment spec:
