@@ -1,0 +1,8 @@
+apiVersion: "clickhouse.altinity.com/v1"
+kind: "ClickHouseOperatorConfiguration"
+metadata:
+  name: "test-051-chopconf"
+spec:
+  clickhouse:
+    metrics:
+      excludeMetricsRegexp: []

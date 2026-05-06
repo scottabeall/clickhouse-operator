@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -416,6 +417,9 @@ type OperatorConfigClickHouse struct {
 		// Multiple tables can be matched using regexp. Matched tables are merged using merge() table function.
 		// Default is "^(metrics|custom_metrics)$" which fetches from both system.metrics and system.custom_metrics.
 		TablesRegexp string `json:"tablesRegexp" yaml:"tablesRegexp"`
+		// ExcludeMetricsRegexp specifies a list of regexps to match ClickHouse metric names to exclude.
+		// Regexps are matched against internal metric names before Prometheus normalization and prefixing.
+		ExcludeMetricsRegexp []string `json:"excludeMetricsRegexp,omitempty" yaml:"excludeMetricsRegexp,omitempty"`
 	} `json:"metrics" yaml:"metrics"`
 }
 
@@ -930,8 +934,15 @@ func (c *OperatorConfig) MergeFrom(from *OperatorConfig) error {
 		return nil
 	}
 
+	excludeMetricsRegexp := from.ClickHouse.Metrics.ExcludeMetricsRegexp
 	if err := mergo.Merge(c, *from, mergo.WithAppendSlice, mergo.WithOverride); err != nil {
 		return fmt.Errorf("FAIL merge config Error: %q", err)
+	}
+
+	// Unlike additive label/template lists, metric exclusion regexps are a complete filter set.
+	// Preserve the distinction between omitted (nil) and explicitly empty ([]) CHOPCONF values.
+	if excludeMetricsRegexp != nil {
+		c.ClickHouse.Metrics.ExcludeMetricsRegexp = slices.Clone(excludeMetricsRegexp)
 	}
 
 	return nil

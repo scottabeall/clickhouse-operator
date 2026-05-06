@@ -40,6 +40,7 @@ import (
 type Exporter struct {
 	collectorTimeout time.Duration
 	registry         *CRRegistry
+	metricFilter     *metricRegexpFilter
 }
 
 // Type compatibility
@@ -50,6 +51,7 @@ func NewExporter(registry *CRRegistry, collectorTimeout time.Duration) *Exporter
 	return &Exporter{
 		registry:         registry,
 		collectorTimeout: collectorTimeout,
+		metricFilter:     newMetricRegexpFilter(chop.Config().ClickHouse.Metrics.ExcludeMetricsRegexp),
 	}
 }
 
@@ -93,7 +95,7 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 func (e *Exporter) collectHostMetrics(ctx context.Context, chi *metrics.WatchedCR, host *metrics.WatchedHost, c chan<- prometheus.Metric) {
 	collector := NewCollector(
 		e.newHostFetcher(host),
-		NewCHIPrometheusWriter(c, chi, host),
+		NewCHIPrometheusWriter(c, chi, host, e.metricFilter),
 	)
 	collector.CollectHostMetrics(ctx, host)
 }
@@ -122,6 +124,7 @@ func (e *Exporter) newHostFetcher(host *metrics.WatchedHost) *MetricsFetcher {
 	return NewMetricsFetcher(
 		clusterConnectionParams.NewEndpointConnectionParams(host.Hostname),
 		chop.Config().ClickHouse.Metrics.TablesRegexp,
+		e.metricFilter,
 	)
 }
 

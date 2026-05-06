@@ -1649,6 +1649,11 @@ func (in *OperatorConfigClickHouse) DeepCopyInto(out *OperatorConfigClickHouse) 
 	out.Access = in.Access
 	in.Addons.DeepCopyInto(&out.Addons)
 	out.Metrics = in.Metrics
+	if in.Metrics.ExcludeMetricsRegexp != nil {
+		in, out := &in.Metrics.ExcludeMetricsRegexp, &out.Metrics.ExcludeMetricsRegexp
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
