@@ -135,7 +135,7 @@ func (c *Controller) uninstallFinalizer(ctx context.Context, chk *apiChk.ClickHo
 
 func (c *Controller) poll(ctx context.Context, cr api.ICustomResource, f func(c *apiChk.ClickHouseKeeperInstallation, e error) bool) {
 	if util.IsContextDone(ctx) {
-		log.V(1).Info("Poll is aborted. cr: %s ", cr.GetName())
+		log.V(1).Info("Poll is aborted 1. cr: %s ", cr.GetName())
 		return
 	}
 
@@ -144,31 +144,41 @@ func (c *Controller) poll(ctx context.Context, cr api.ICustomResource, f func(c 
 	for {
 		cur, err := c.kube.CR().Get(ctx, namespace, name)
 		chk, ok := cur.(*apiChk.ClickHouseKeeperInstallation)
-		if !ok || chk == nil {
-			if apiErrors.IsNotFound(err) {
+		if !ok || (chk == nil) {
+			// Fetched object is not good, handle error
+			switch {
+			case apiErrors.IsNotFound(err):
+				// Object not found, not an error per se, just nothing to poll
 				return
-			}
-			if err != nil {
-				log.V(1).Info("poll Get error for %s: %v", cr.GetName(), err)
-			} else {
+			case err != nil:
+				// Other non-not-found error, go to next poll cycle, retry
+				log.Warning("poll Get error for %s: %v", cr.GetName(), err)
+			default:
+				// err is nil, but we have issue with chk, go to next poll cycle, retry
 				log.V(1).Info("poll Get returned unexpected type for %s: %T", cr.GetName(), cur)
 			}
+
+			// Go to next poll cycle, retry
+
 			if util.IsContextDone(ctx) {
-				log.V(1).Info("Poll is aborted. Cr: %s ", cr.GetName())
+				log.V(1).Info("Poll is aborted 2. Cr: %s ", cr.GetName())
 				return
 			}
 			time.Sleep(15 * time.Second)
 			continue
 		}
+
+		// Fetched object is good, call function to process it
+
 		if f(chk, err) {
-			// Continue polling
+			// Function says to continue polling
 			if util.IsContextDone(ctx) {
-				log.V(1).Info("Poll is aborted. Cr: %s ", cr.GetName())
+				log.V(1).Info("Poll is aborted 3. CR: %s ", cr.GetName())
 				return
 			}
 			time.Sleep(15 * time.Second)
 		} else {
-			// Stop polling
+			// Function says to stop polling
 			return
 		}
 	}
