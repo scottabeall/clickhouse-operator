@@ -61,12 +61,14 @@ const (
 	HookFailurePolicyIgnore HookFailurePolicy = "Ignore"
 )
 
-// NewHookTarget builds a HookTarget value from a plain string.
+// NewHookTarget builds a HookTarget value from a plain string. Use over a raw HookTarget(s)
+// cast at call sites to make typed-domain construction obvious to readers.
 func NewHookTarget(s string) HookTarget {
 	return HookTarget(s)
 }
 
-// NewHookFailurePolicy builds a HookFailurePolicy value from a plain string.
+// NewHookFailurePolicy builds a HookFailurePolicy value from a plain string. Sibling of
+// NewHookTarget — see that function for rationale.
 func NewHookFailurePolicy(s string) HookFailurePolicy {
 	return HookFailurePolicy(s)
 }
@@ -276,7 +278,8 @@ type HookAction struct {
 	// +optional
 	HTTP *HTTPHookAction `json:"http,omitempty" yaml:"http,omitempty"`
 	// Target specifies which host(s) to execute this action on, for cluster-level hooks.
-	// See HookTarget for valid values, defaults, and the *types.String field-type rationale.
+	// See HookTarget for valid values and defaults.
+	// Stored as *types.String for codegen reasons (see HookTarget).
 	// Use a.GetTarget() for the typed read.
 	// +optional
 	Target *types.String `json:"target,omitempty" yaml:"target,omitempty"`
@@ -295,8 +298,8 @@ type HookAction struct {
 	//                          post-hooks run after the reconcile work is already done.
 	//   Post-hook with Ignore: error is logged as a warning, the next post-hook still runs.
 	// Useful for best-effort drains on a possibly-broken host (Ignore on a delete pre-hook).
-	// Stored as *types.String for the same codegen reason described on HookTarget; use
-	// a.GetFailurePolicy() for the typed read.
+	// Stored as *types.String for codegen reasons (see HookTarget).
+	// Use a.GetFailurePolicy() for the typed read.
 	// +optional
 	FailurePolicy *types.String `json:"failurePolicy,omitempty" yaml:"failurePolicy,omitempty"`
 }

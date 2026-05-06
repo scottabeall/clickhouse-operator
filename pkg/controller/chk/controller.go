@@ -135,7 +135,7 @@ func (c *Controller) uninstallFinalizer(ctx context.Context, chk *apiChk.ClickHo
 
 func (c *Controller) poll(ctx context.Context, cr api.ICustomResource, f func(c *apiChk.ClickHouseKeeperInstallation, e error) bool) {
 	if util.IsContextDone(ctx) {
-		log.V(1).Info("Poll is aborted 1. cr: %s ", cr.GetName())
+		log.V(1).Info("Poll is aborted before start. CR: %s", cr.GetName())
 		return
 	}
 
@@ -161,7 +161,7 @@ func (c *Controller) poll(ctx context.Context, cr api.ICustomResource, f func(c 
 			// Go to next poll cycle, retry
 
 			if util.IsContextDone(ctx) {
-				log.V(1).Info("Poll is aborted 2. Cr: %s ", cr.GetName())
+				log.V(1).Info("Poll is aborted before retry. CR: %s", cr.GetName())
 				return
 			}
 			time.Sleep(15 * time.Second)
@@ -173,7 +173,7 @@ func (c *Controller) poll(ctx context.Context, cr api.ICustomResource, f func(c 
 		if f(chk, err) {
 			// Function says to continue polling
 			if util.IsContextDone(ctx) {
-				log.V(1).Info("Poll is aborted 3. CR: %s ", cr.GetName())
+				log.V(1).Info("Poll is aborted after polling fn. CR: %s", cr.GetName())
 				return
 			}
 			time.Sleep(15 * time.Second)
