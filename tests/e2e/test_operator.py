@@ -5261,10 +5261,15 @@ def test_010051(self):
         kubectl.delete(util.get_full_path(chopconf_file, lookup_in_host=False), operator_namespace)
         util.restart_operator()
 
+    # After restart_operator the metrics-exporter must (a) re-discover CHIs, (b) get
+    # scraped by Prometheus, (c) actually fetch system.metrics. Allow ~10 min for slow
+    # CI runners — default 12 retries (~4 min) was tight and produced spurious failures
+    # where VersionInteger had not yet re-appeared.
     wait_metrics_state(
         "CPU-related ClickHouse metrics should disappear while VersionInteger remains when exclusions are enabled",
         present_patterns=[version_metric_pattern],
         absent_patterns=[cpu_metric_pattern],
+        max_retries=24,
     )
 
     with Finally("I clean up"):
