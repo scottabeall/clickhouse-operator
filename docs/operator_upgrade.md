@@ -6,7 +6,7 @@
 
 **0.26.x → 0.27.0 CHK note:** existing ClickHouse Keeper pods will be rolled (sequentially, gated by the startup probe) due to two operator-rendered keeper-config additions: an explicit `<four_letter_word_white_list>` (so the new ruok-based liveness probe keeps working even when users add restrictive `keeper_server` overrides) and the migration of the liveness probe itself from `pgrep` to a `ruok`/`imok` 4LW handshake. No data migration is required.
 
-**0.26.x → 0.27.0 metrics note:** the default chop config now ships `clickhouse.metrics.excludeRegexp: ["^metric\\.(OS.*CPU[0-9]+|CPUFrequencyMHz_[0-9]+)$"]`, which filters per-CPU OS metrics (`metric.OSUserTimeCPU0..N`, `metric.CPUFrequencyMHz_*` etc.) from the metrics-exporter output. Dashboards or alerts that referenced these series will go silent after upgrade. To restore the prior behaviour, set `excludeRegexp: []` in your `ClickHouseOperatorConfiguration` (chopconf).
+**0.26.x → 0.27.0 metrics note:** the default chop config now filters per-CPU OS metrics (`metric.OSUserTimeCPU0..N`, `metric.CPUFrequencyMHz_*`, etc.) from the metrics-exporter output. Dashboards or alerts that referenced these series will go silent after upgrade. To restore the prior behaviour, set `excludeRegexp: []` in your `ClickHouseOperatorConfiguration`.
 
 ClickHouse operator is deployed as Deployment Kubernetes resource (see: [Operator Installation Guide][operator_installation_details.md] for more details).
 Supplied [clickhouse-operator-install-bundle.yaml][clickhouse-operator-install-bundle.yaml] contains the following deployment spec:
