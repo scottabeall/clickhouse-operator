@@ -319,7 +319,7 @@
                                         "metrics": {
                                             "type": "object",
                                             "properties": {
-                                                "excludeMetricsRegexp": {
+                                                "excludeRegexp": {
                                                     "type": "array",
                                                     "items": {
                                                         "type": "string"

@@ -533,7 +533,7 @@ configs:
           tablesRegexp: "^(metrics|custom_metrics)$"
           # List of regexps to match ClickHouse metrics to exclude from export.
           # Regexps match internal metric names before Prometheus normalization and prefixing.
-          excludeMetricsRegexp:
+          excludeRegexp:
             - "^metric\\.(OS.*CPU[0-9]+|CPUFrequencyMHz_[0-9]+)$"
       keeper:
         configuration:
