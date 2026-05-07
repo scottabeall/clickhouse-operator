@@ -409,18 +409,40 @@ type OperatorConfigClickHouse struct {
 	Addons OperatorConfigAddons `json:"addons" yaml:"addons"`
 
 	// Metrics used to specify how the operator fetches metrics from ClickHouse instances
-	Metrics struct {
-		Timeouts struct {
-			Collect time.Duration `json:"collect" yaml:"collect"`
-		} `json:"timeouts" yaml:"timeouts"`
-		// TablesRegexp specifies regexp to match tables in system database to fetch metrics from.
-		// Multiple tables can be matched using regexp. Matched tables are merged using merge() table function.
-		// Default is "^(metrics|custom_metrics)$" which fetches from both system.metrics and system.custom_metrics.
-		TablesRegexp string `json:"tablesRegexp" yaml:"tablesRegexp"`
-		// ExcludeMetricsRegexp specifies a list of regexps to match ClickHouse metric names to exclude.
-		// Regexps are matched against internal metric names before Prometheus normalization and prefixing.
-		ExcludeMetricsRegexp []string `json:"excludeMetricsRegexp,omitempty" yaml:"excludeMetricsRegexp,omitempty"`
-	} `json:"metrics" yaml:"metrics"`
+	Metrics OperatorConfigClickHouseMetrics `json:"metrics" yaml:"metrics"`
+}
+
+// OperatorConfigClickHouseMetrics specifies how the operator fetches metrics from ClickHouse.
+//
+// Field-tag convention: no `omitempty` on any field below. The marshaled YAML doubles as
+// the operator's documented config surface (rendered into `config/config.yaml` and the
+// install bundles), so we want zero/empty values to appear explicitly — that's how users
+// discover what knobs exist. Sibling string-list fields elsewhere in OperatorConfig
+// (NetworksIP, Include/Exclude, WatchNamespaces, IncludeIntoPropagationLabels) follow the
+// same convention.
+type OperatorConfigClickHouseMetrics struct {
+	// Timeouts groups wall-clock limits applied to the metrics-exporter's outbound
+	// requests to ClickHouse. Currently only one budget — Collect — but kept as a
+	// nested struct to leave room for future per-phase timeouts (connect, query, etc.)
+	// without breaking the YAML schema.
+	Timeouts struct {
+		// Collect is the per-scrape wall-clock budget for the metrics-exporter to
+		// finish fetching metrics from ALL hosts of a single CR. Specified in seconds
+		// Default: defaultTimeoutCollect (8s). Tune up for clusters with many hosts
+		// or slow ClickHouse query paths; tune down to fail-fast on hung backends.
+		Collect time.Duration `json:"collect" yaml:"collect"`
+	} `json:"timeouts" yaml:"timeouts"`
+	// TablesRegexp specifies regexp to match tables in system database to fetch metrics from.
+	// Multiple tables can be matched via alternation in a single regexp (e.g. "^(a|b)$").
+	// Matched tables are merged using ClickHouse's merge() table function, which takes
+	// exactly one regexp — that's why this is a string, not a list (cf. ExcludeRegexp).
+	// Default is "^(metrics|custom_metrics)$" which fetches from both system.metrics and system.custom_metrics.
+	TablesRegexp string `json:"tablesRegexp" yaml:"tablesRegexp"`
+	// ExcludeRegexp specifies a list of regexps to match ClickHouse metric names to exclude.
+	// Regexps are matched against internal metric names before Prometheus normalization and prefixing.
+	// A list (not a single regexp like TablesRegexp) because the writer-side filter evaluates
+	// each pattern independently against each metric name — N regexps, OR-of-matches semantics.
+	ExcludeRegexp []string `json:"excludeRegexp" yaml:"excludeRegexp"`
 }
 
 // OperatorConfigCoordination specifies coordination with external systems during reconcile.
@@ -934,15 +956,15 @@ func (c *OperatorConfig) MergeFrom(from *OperatorConfig) error {
 		return nil
 	}
 
-	excludeMetricsRegexp := from.ClickHouse.Metrics.ExcludeMetricsRegexp
+	excludeRegexp := from.ClickHouse.Metrics.ExcludeRegexp
 	if err := mergo.Merge(c, *from, mergo.WithAppendSlice, mergo.WithOverride); err != nil {
 		return fmt.Errorf("FAIL merge config Error: %q", err)
 	}
 
 	// Unlike additive label/template lists, metric exclusion regexps are a complete filter set.
 	// Preserve the distinction between omitted (nil) and explicitly empty ([]) CHOPCONF values.
-	if excludeMetricsRegexp != nil {
-		c.ClickHouse.Metrics.ExcludeMetricsRegexp = slices.Clone(excludeMetricsRegexp)
+	if excludeRegexp != nil {
+		c.ClickHouse.Metrics.ExcludeRegexp = slices.Clone(excludeRegexp)
 	}
 
 	return nil
