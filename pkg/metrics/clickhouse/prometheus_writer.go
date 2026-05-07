@@ -41,10 +41,10 @@ const (
 
 // CHIPrometheusWriter specifies writer to prometheus
 type CHIPrometheusWriter struct {
-	out          chan<- prometheus.Metric
-	chi          *metrics.WatchedCR
-	host         *metrics.WatchedHost
-	metricFilter *metricRegexpFilter
+	out           chan<- prometheus.Metric
+	chi           *metrics.WatchedCR
+	host          *metrics.WatchedHost
+	metricsFilter MetricsFilter
 }
 
 // NewCHIPrometheusWriter creates new CHI prometheus writer
@@ -52,13 +52,13 @@ func NewCHIPrometheusWriter(
 	out chan<- prometheus.Metric,
 	chi *metrics.WatchedCR,
 	host *metrics.WatchedHost,
-	metricFilter *metricRegexpFilter,
+	metricsFilter MetricsFilter,
 ) *CHIPrometheusWriter {
 	return &CHIPrometheusWriter{
-		out:          out,
-		chi:          chi,
-		host:         host,
-		metricFilter: metricFilter,
+		out:           out,
+		chi:           chi,
+		host:          host,
+		metricsFilter: metricsFilter,
 	}
 }
 
@@ -263,7 +263,9 @@ func (w *CHIPrometheusWriter) writeSingleMetricToPrometheus(
 	value string,
 	metricLabels map[string]string,
 ) {
-	if w.metricFilter.isExcluded(name) {
+	// Nil-guard: a writer constructed via struct literal without setting metricsFilter
+	// would panic on dispatch; treat nil interface as "no exclusions" (no-op filter).
+	if (w.metricsFilter != nil) && w.metricsFilter.IsExcluded(name) {
 		return
 	}
 
