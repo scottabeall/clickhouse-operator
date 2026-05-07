@@ -46,7 +46,7 @@ type Exporter struct {
 
 // Type compatibility
 var _ prometheus.Collector = &Exporter{}
-var _ MetricFilter = &filters.Regexp{}
+var _ MetricsFilter = &filters.Regexp{}
 
 // NewExporter returns a new instance of Exporter type
 func NewExporter(registry *CRRegistry, collectorTimeout time.Duration) *Exporter {
