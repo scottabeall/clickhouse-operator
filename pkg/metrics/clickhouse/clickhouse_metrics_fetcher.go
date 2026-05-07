@@ -142,19 +142,16 @@ const (
 type MetricsFetcher struct {
 	connectionParams *clickhouse.EndpointConnectionParams
 	tablesRegexp     string
-	metricFilter     *metricRegexpFilter
 }
 
 // NewMetricsFetcher creates new clickhouse fetcher object
 func NewMetricsFetcher(
 	endpointConnectionParams *clickhouse.EndpointConnectionParams,
 	tablesRegexp string,
-	metricFilter *metricRegexpFilter,
 ) *MetricsFetcher {
 	return &MetricsFetcher{
 		connectionParams: endpointConnectionParams,
 		tablesRegexp:     tablesRegexp,
-		metricFilter:     metricFilter,
 	}
 }
 
@@ -163,8 +160,10 @@ func (f *MetricsFetcher) connection() *clickhouse.Connection {
 	return clickhouse.GetPooledDBConnection(f.connectionParams)
 }
 
-// buildMetricsTableSource returns the FROM clause for the metrics query.
-// If tablesRegexp is set, it uses merge() to query tables matching the regexp.
+// buildMetricsTableSource returns the FROM clause for the metrics query —
+// the WHICH-tables half of the SQL build (cf. buildMetricsSQL which assembles
+// the full query). If tablesRegexp is set it uses merge() to query tables
+// matching the regexp; otherwise it falls back to the bundled default.
 func (f *MetricsFetcher) buildMetricsTableSource() string {
 	if f.tablesRegexp == "" {
 		return "merge('system','^(metrics|custom_metrics)$')"
@@ -172,20 +171,19 @@ func (f *MetricsFetcher) buildMetricsTableSource() string {
 	return fmt.Sprintf("merge('system','%s')", f.tablesRegexp)
 }
 
+// buildMetricsSQL renders the metrics-fetch SQL by substituting the table-source
+// clause into queryMetricsSQLTemplate. Symmetric with buildMetricsTableSource:
+// one helper picks WHICH tables to read, this one assembles the full query.
 func (f *MetricsFetcher) buildMetricsSQL() string {
-	metricsSQL := fmt.Sprintf(queryMetricsSQLTemplate, f.buildMetricsTableSource())
-	if !f.metricFilter.hasPatterns() {
-		return metricsSQL
-	}
-
-	return fmt.Sprintf(`
-		SELECT metric, value, description, type
-		FROM (%s)
-		WHERE NOT (%s)
-	`, metricsSQL, f.metricFilter.buildExcludeMetricsWhere())
+	return fmt.Sprintf(queryMetricsSQLTemplate, f.buildMetricsTableSource())
 }
 
-// getClickHouseQueryMetrics requests metrics data from ClickHouse
+// getClickHouseQueryMetrics requests metrics data from ClickHouse.
+// Exclusion of "noisy" metrics is enforced solely by the writer-side filter
+// (see CHIPrometheusWriter.metricsFilter). A SQL-side filter was tried and
+// dropped: wrapping the UNION-ALL chain in `FROM (...) WHERE NOT (...)` left
+// the metrics query returning zero rows across restart-then-scrape windows;
+// the writer-side filter is sufficient and avoids that fragility.
 func (f *MetricsFetcher) getClickHouseQueryMetrics(ctx context.Context) (Table, error) {
 	return f.clickHouseQueryScanRows(
 		ctx,
