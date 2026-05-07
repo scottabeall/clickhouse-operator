@@ -428,7 +428,7 @@ type OperatorConfigClickHouseMetrics struct {
 	Timeouts struct {
 		// Collect is the per-scrape wall-clock budget for the metrics-exporter to
 		// finish fetching metrics from ALL hosts of a single CR. Specified in seconds
-		// Default: defaultTimeoutCollect (8s). Tune up for clusters with many hosts
+		// Default: defaultTimeoutCollect. Tune up for clusters with many hosts
 		// or slow ClickHouse query paths; tune down to fail-fast on hung backends.
 		Collect time.Duration `json:"collect" yaml:"collect"`
 	} `json:"timeouts" yaml:"timeouts"`
