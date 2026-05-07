@@ -98,6 +98,11 @@ spec:
       # Multiple tables can be matched using regexp. Matched tables are merged using merge() table function.
       # Default is "^(metrics|custom_metrics)$".
       tablesRegexp: "^(metrics|custom_metrics)$"
+      # List of regexps to match ClickHouse metrics to exclude from export.
+      # Regexps match internal metric names before Prometheus normalization and prefixing.
+      # Set to [] to disable the default exclusion of per-CPU OS metrics.
+      excludeRegexp:
+        - "^metric\\.(OS.*CPU[0-9]+|CPUFrequencyMHz_[0-9]+)$"
 
   ################################################
   ##
