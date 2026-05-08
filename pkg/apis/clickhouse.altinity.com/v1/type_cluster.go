@@ -95,6 +95,9 @@ func (a *ChiClusterAddress) SetClusterIndex(index int) {
 }
 
 func (cluster *Cluster) GetName() string {
+	if cluster == nil {
+		return ""
+	}
 	return cluster.Name
 }
 
@@ -107,6 +110,9 @@ func (cluster *Cluster) HasName() bool {
 }
 
 func (c *Cluster) GetZookeeper() *ZookeeperConfig {
+	if c == nil {
+		return nil
+	}
 	return c.Zookeeper
 }
 
@@ -195,30 +201,25 @@ func (cluster *Cluster) SelectSettingsSourceFrom(shard IShard, replica IReplica)
 // InheritZookeeperFrom inherits zookeeper config from CHI
 func (cluster *Cluster) InheritZookeeperFrom(chi *ClickHouseInstallation) {
 	if !cluster.Zookeeper.IsEmpty() {
-		// Has zk config explicitly specified alread
+		// Has zk config explicitly specified already
 		return
 	}
-	if chi.GetSpecT().Configuration == nil {
+	parentZk := chi.GetSpecT().GetConfiguration().GetZookeeper()
+	if parentZk == nil {
 		return
 	}
-	if chi.GetSpecT().Configuration.Zookeeper == nil {
-		return
-	}
-
-	cluster.Zookeeper = cluster.Zookeeper.MergeFrom(chi.GetSpecT().Configuration.Zookeeper, MergeTypeFillEmptyValues)
+	cluster.Zookeeper = cluster.Zookeeper.MergeFrom(parentZk, MergeTypeFillEmptyValues)
 }
 
 // InheritFilesFrom inherits files from CR
 func (cluster *Cluster) InheritFilesFrom(chi *ClickHouseInstallation) {
-	if chi.GetSpecT().Configuration == nil {
-		return
-	}
-	if chi.GetSpecT().Configuration.Files == nil {
+	parentFiles := chi.GetSpecT().GetConfiguration().GetFiles()
+	if parentFiles == nil {
 		return
 	}
 
 	// Propagate host section only
-	cluster.Files = cluster.Files.MergeFromCB(chi.GetSpecT().Configuration.Files, func(path string, _ *Setting) bool {
+	cluster.Files = cluster.Files.MergeFromCB(parentFiles, func(path string, _ *Setting) bool {
 		if section, err := GetSectionFromPath(path); err == nil {
 			if section.Equal(SectionHost) {
 				return true
@@ -238,6 +239,9 @@ func (cluster *Cluster) InheritClusterReconcileFrom(chi *ClickHouseInstallation)
 	reconcile.Runtime = reconcile.Runtime.MergeFrom(chi.Spec.Reconcile.Runtime, MergeTypeFillEmptyValues)
 	reconcile.StatefulSet = reconcile.StatefulSet.MergeFrom(chi.Spec.Reconcile.StatefulSet)
 	reconcile.Host = reconcile.Host.MergeFrom(chi.Spec.Reconcile.Host)
+	// Inherit CHI-level cluster hooks into this cluster's reconcile.hooks. The merge
+	// is dedup'd (see mergeHookActions) so re-running normalization is idempotent.
+	reconcile.Hooks = reconcile.Hooks.MergeFrom(chi.Spec.Reconcile.Cluster.GetHooks())
 	cluster.Reconcile = reconcile
 }
 
@@ -322,6 +326,22 @@ func (cluster *Cluster) FirstHost() *Host {
 		return nil
 	})
 	return result
+}
+
+// HasRunningHosts reports whether the cluster has any hosts that existed in a previous
+// reconcile (i.e. host has an ancestor). On first CHI creation, hosts have no ancestors —
+// callers that need a live target (e.g. SQL hooks) use this to skip first-creation paths
+// where pods don't exist yet.
+//
+// Approximated by checking only the first host's ancestor flag — sufficient because the
+// reconciler advances all hosts together: either the cluster is brand new (no ancestors
+// anywhere) or it has prior state (at least the first host has one).
+func (cluster *Cluster) HasRunningHosts() bool {
+	firstHost := cluster.FirstHost()
+	if firstHost == nil {
+		return false
+	}
+	return firstHost.HasAncestor()
 }
 
 // WalkShards walks shards

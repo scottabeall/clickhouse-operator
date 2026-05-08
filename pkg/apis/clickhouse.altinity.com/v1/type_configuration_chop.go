@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,6 +41,27 @@ const (
 	// Default values for update timeout and polling period in seconds
 	defaultStatefulSetUpdateTimeout      = 300
 	defaultStatefulSetUpdatePollInterval = 5
+
+	// defaultKeeperReadyTimeout specifies default timeout (seconds) to wait for
+	// a referenced ClickHouseKeeper to become ready during CHI reconcile.
+	defaultKeeperReadyTimeout = 120
+
+	// KeeperOnResourceUpdateNone means do nothing when referenced CHK changes (default).
+	KeeperOnResourceUpdateNone = "none"
+	// KeeperOnResourceUpdateReconcile means trigger CHI reconcile when referenced CHK changes.
+	KeeperOnResourceUpdateReconcile = "reconcile"
+
+	// OnConfigurationChangeNone means ignore ClickHouseOperatorConfiguration changes (default).
+	OnConfigurationChangeNone = "none"
+	// OnConfigurationChangeIgnore is an alias for OnConfigurationChangeNone.
+	OnConfigurationChangeIgnore = "ignore"
+	// OnConfigurationChangeRestart means exit the process so the pod restarts with the new config.
+	OnConfigurationChangeRestart = "restart"
+
+	// RecoveryActionNone means do nothing, CHI stays Aborted.
+	RecoveryActionNone = "none"
+	// RecoveryActionRetry means re-enqueue CHI for reconcile (default).
+	RecoveryActionRetry = "retry"
 
 	// Default values for ClickHouse user configuration
 	// 1. user/profile
@@ -188,11 +210,28 @@ type OperatorConfigRuntime struct {
 type OperatorConfigWatch struct {
 	// Namespaces where operator watches for events
 	Namespaces OperatorConfigWatchNamespaces `json:"namespaces" yaml:"namespaces"`
+
+	// Configuration specifies behavior related to ClickHouseOperatorConfiguration watches
+	Configuration OperatorConfigWatchConfiguration `json:"configuration,omitempty" yaml:"configuration,omitempty"`
+}
+
+// OperatorConfigWatchConfiguration specifies behavior when operator-wide configuration changes.
+type OperatorConfigWatchConfiguration struct {
+	// OnChange controls reaction to ClickHouseOperatorConfiguration changes:
+	//   nil / "none" / "ignore" (default) — do nothing
+	//   "restart"                         — exit process so the operator pod restarts
+	OnChange *types.String `json:"onChange,omitempty" yaml:"onChange,omitempty"`
+}
+
+// MergeFrom merges watch configuration settings, filling empty values.
+func (c OperatorConfigWatchConfiguration) MergeFrom(from OperatorConfigWatchConfiguration) OperatorConfigWatchConfiguration {
+	c.OnChange = c.OnChange.MergeFrom(from.OnChange)
+	return c
 }
 
 type OperatorConfigWatchNamespaces struct {
-	Include *types.Strings `json:"include" yaml:"include`
-	Exclude *types.Strings `json:"exclude" yaml:"exclude`
+	Include *types.Strings `json:"include" yaml:"include"`
+	Exclude *types.Strings `json:"exclude" yaml:"exclude"`
 }
 
 func (n *OperatorConfigWatchNamespaces) UnmarshalJSON(data []byte) error {
@@ -370,15 +409,72 @@ type OperatorConfigClickHouse struct {
 	Addons OperatorConfigAddons `json:"addons" yaml:"addons"`
 
 	// Metrics used to specify how the operator fetches metrics from ClickHouse instances
-	Metrics struct {
-		Timeouts struct {
-			Collect time.Duration `json:"collect" yaml:"collect"`
-		} `json:"timeouts" yaml:"timeouts"`
-		// TablesRegexp specifies regexp to match tables in system database to fetch metrics from.
-		// Multiple tables can be matched using regexp. Matched tables are merged using merge() table function.
-		// Default is "^(metrics|custom_metrics)$" which fetches from both system.metrics and system.custom_metrics.
-		TablesRegexp string `json:"tablesRegexp" yaml:"tablesRegexp"`
-	} `json:"metrics" yaml:"metrics"`
+	Metrics OperatorConfigClickHouseMetrics `json:"metrics" yaml:"metrics"`
+}
+
+// OperatorConfigClickHouseMetrics specifies how the operator fetches metrics from ClickHouse.
+//
+// Field-tag convention: no `omitempty` on any field below. The marshaled YAML doubles as
+// the operator's documented config surface (rendered into `config/config.yaml` and the
+// install bundles), so we want zero/empty values to appear explicitly — that's how users
+// discover what knobs exist. Sibling string-list fields elsewhere in OperatorConfig
+// (NetworksIP, Include/Exclude, WatchNamespaces, IncludeIntoPropagationLabels) follow the
+// same convention.
+type OperatorConfigClickHouseMetrics struct {
+	// Timeouts groups wall-clock limits applied to the metrics-exporter's outbound
+	// requests to ClickHouse. Currently only one budget — Collect — but kept as a
+	// nested struct to leave room for future per-phase timeouts (connect, query, etc.)
+	// without breaking the YAML schema.
+	Timeouts struct {
+		// Collect is the per-scrape wall-clock budget for the metrics-exporter to
+		// finish fetching metrics from ALL hosts of a single CR. Specified in seconds
+		// Default: defaultTimeoutCollect. Tune up for clusters with many hosts
+		// or slow ClickHouse query paths; tune down to fail-fast on hung backends.
+		Collect time.Duration `json:"collect" yaml:"collect"`
+	} `json:"timeouts" yaml:"timeouts"`
+	// TablesRegexp specifies regexp to match tables in system database to fetch metrics from.
+	// Multiple tables can be matched via alternation in a single regexp (e.g. "^(a|b)$").
+	// Matched tables are merged using ClickHouse's merge() table function, which takes
+	// exactly one regexp — that's why this is a string, not a list (cf. ExcludeRegexp).
+	// Default is "^(metrics|custom_metrics)$" which fetches from both system.metrics and system.custom_metrics.
+	TablesRegexp string `json:"tablesRegexp" yaml:"tablesRegexp"`
+	// ExcludeRegexp specifies a list of regexps to match ClickHouse metric names to exclude.
+	// Regexps are matched against internal metric names before Prometheus normalization and prefixing.
+	// A list (not a single regexp like TablesRegexp) because the writer-side filter evaluates
+	// each pattern independently against each metric name — N regexps, OR-of-matches semantics.
+	ExcludeRegexp []string `json:"excludeRegexp" yaml:"excludeRegexp"`
+}
+
+// OperatorConfigCoordination specifies coordination with external systems during reconcile.
+type OperatorConfigCoordination struct {
+	// Keeper specifies keeper-related coordination settings.
+	Keeper OperatorConfigCoordinationKeeper `json:"keeper" yaml:"keeper"`
+}
+
+// MergeFrom merges coordination settings from another config, filling empty values.
+func (c OperatorConfigCoordination) MergeFrom(from OperatorConfigCoordination) OperatorConfigCoordination {
+	c.Keeper = c.Keeper.MergeFrom(from.Keeper)
+	return c
+}
+
+// OperatorConfigCoordinationKeeper specifies keeper-related coordination settings.
+type OperatorConfigCoordinationKeeper struct {
+	// ReadyTimeout specifies how long the operator waits for a referenced
+	// ClickHouseKeeper to become ready before aborting CHI reconcile. In seconds.
+	ReadyTimeout int `json:"readyTimeout" yaml:"readyTimeout"`
+	// OnKeeperResourceUpdate specifies the reaction when a referenced CHK resource changes.
+	//   nil / "none" (default) — do nothing, backward-compatible
+	//   "reconcile"            — trigger reconcile of dependent CHIs
+	OnKeeperResourceUpdate *types.String `json:"onKeeperResourceUpdate,omitempty" yaml:"onKeeperResourceUpdate,omitempty"`
+}
+
+// MergeFrom merges keeper coordination settings from another config, filling empty values.
+func (k OperatorConfigCoordinationKeeper) MergeFrom(from OperatorConfigCoordinationKeeper) OperatorConfigCoordinationKeeper {
+	if k.ReadyTimeout == 0 && from.ReadyTimeout > 0 {
+		k.ReadyTimeout = from.ReadyTimeout
+	}
+	k.OnKeeperResourceUpdate = k.OnKeeperResourceUpdate.MergeFrom(from.OnKeeperResourceUpdate)
+	return k
 }
 
 // OperatorConfigKeeper specifies Keeper section
@@ -457,6 +553,43 @@ type OperatorConfigReconcile struct {
 	} `json:"statefulSet" yaml:"statefulSet"`
 
 	Host ReconcileHost `json:"host" yaml:"host"`
+
+	// Coordination specifies how the operator coordinates with external systems during reconcile.
+	Coordination OperatorConfigCoordination `json:"coordination" yaml:"coordination"`
+
+	// Recovery specifies how the operator auto-recovers from aborted reconcile when recovery
+	// signals arrive (e.g. a pod becomes Ready). Each onXxx key maps a signal to an action.
+	Recovery OperatorConfigReconcileRecovery `json:"recovery,omitempty" yaml:"recovery,omitempty"`
+}
+
+// OperatorConfigReconcileRecovery specifies auto-recovery behavior for reconcile.
+// Event→action mappings are scoped by the CHI state we recover FROM (under .From).
+// Global policy knobs (future: retries, backoff, cooldown, enabled) sit as flat peers
+// of .From at this level. Multi-scope design anticipates future states beyond Aborted
+// (e.g. Failed, Broken).
+type OperatorConfigReconcileRecovery struct {
+	// From maps the CHI state we recover from (e.g. aborted) to event→action mappings.
+	From OperatorConfigReconcileRecoveryFrom `json:"from,omitempty" yaml:"from,omitempty"`
+}
+
+// OperatorConfigReconcileRecoveryFrom groups recovery-event mappings by the CHI state
+// being recovered from. Each sub-field is a scope whose keys are on<Event> recovery
+// triggers.
+type OperatorConfigReconcileRecoveryFrom struct {
+	// Aborted scope — recovery from Status=Aborted.
+	Aborted OperatorConfigReconcileRecoveryScope `json:"aborted,omitempty" yaml:"aborted,omitempty"`
+	// Future: Failed, Broken, etc.
+}
+
+// OperatorConfigReconcileRecoveryScope holds the event→action mappings for a single
+// recovery scope. The scope key itself (e.g. aborted) identifies which CHI state the
+// mappings apply to.
+type OperatorConfigReconcileRecoveryScope struct {
+	// OnPodReady controls reaction when a pod belonging to a CHI in this scope becomes Ready:
+	//   nil / "retry" (default) — re-enqueue CHI for reconcile
+	//   "none"                  — do nothing, CHI stays in the state
+	OnPodReady *types.String `json:"onPodReady,omitempty" yaml:"onPodReady,omitempty"`
+	// Future: OnKeeperReady, OnOperatorRestart.
 }
 
 type OperatorConfigReconcileRuntime struct {
@@ -470,8 +603,17 @@ type OperatorConfigReconcileRuntime struct {
 
 // ReconcileHost defines reconcile host config
 type ReconcileHost struct {
-	Wait ReconcileHostWait `json:"wait" yaml:"wait"`
-	Drop ReconcileHostDrop `json:"drop" yaml:"drop"`
+	Wait  ReconcileHostWait `json:"wait" yaml:"wait"`
+	Drop  ReconcileHostDrop `json:"drop" yaml:"drop"`
+	Hooks *ReconcileHooks   `json:"hooks,omitempty" yaml:"hooks,omitempty"`
+}
+
+// GetHooks returns host-level hooks or nil.
+func (rh *ReconcileHost) GetHooks() *ReconcileHooks {
+	if rh == nil {
+		return nil
+	}
+	return rh.Hooks
 }
 
 func (rh ReconcileHost) Normalize() ReconcileHost {
@@ -483,6 +625,7 @@ func (rh ReconcileHost) Normalize() ReconcileHost {
 func (rh ReconcileHost) MergeFrom(from ReconcileHost) ReconcileHost {
 	rh.Wait = rh.Wait.MergeFrom(from.Wait)
 	rh.Drop = rh.Drop.MergeFrom(from.Drop)
+	rh.Hooks = rh.Hooks.MergeFrom(from.Hooks)
 	return rh
 }
 
@@ -813,8 +956,15 @@ func (c *OperatorConfig) MergeFrom(from *OperatorConfig) error {
 		return nil
 	}
 
+	excludeRegexp := from.ClickHouse.Metrics.ExcludeRegexp
 	if err := mergo.Merge(c, *from, mergo.WithAppendSlice, mergo.WithOverride); err != nil {
 		return fmt.Errorf("FAIL merge config Error: %q", err)
+	}
+
+	// Unlike additive label/template lists, metric exclusion regexps are a complete filter set.
+	// Preserve the distinction between omitted (nil) and explicitly empty ([]) CHOPCONF values.
+	if excludeRegexp != nil {
+		c.ClickHouse.Metrics.ExcludeRegexp = slices.Clone(excludeRegexp)
 	}
 
 	return nil
@@ -1144,6 +1294,12 @@ func (c *OperatorConfig) normalizeSectionClickHouseMetrics() {
 	}
 }
 
+func (c *OperatorConfig) normalizeSectionReconcileCoordination() {
+	if c.Reconcile.Coordination.Keeper.ReadyTimeout <= 0 {
+		c.Reconcile.Coordination.Keeper.ReadyTimeout = defaultKeeperReadyTimeout
+	}
+}
+
 func (c *OperatorConfig) normalizeSectionLogger() {
 	// Logtostderr      string `json:"logtostderr"      yaml:"logtostderr"`
 	// Alsologtostderr  string `json:"alsologtostderr"  yaml:"alsologtostderr"`
@@ -1200,6 +1356,7 @@ func (c *OperatorConfig) normalize() {
 	c.normalizeSectionClickHouseConfigurationFile()
 	c.normalizeSectionClickHouseConfigurationUserDefault()
 	c.normalizeSectionClickHouseAccess()
+	c.normalizeSectionReconcileCoordination()
 	c.normalizeSectionClickHouseMetrics()
 	c.normalizeSectionKeeperConfigurationFile()
 	c.normalizeSectionTemplate()
@@ -1265,7 +1422,7 @@ func (c *OperatorConfig) applyDefaultWatchNamespace() {
 
 	if c.Runtime.Namespace == meta.NamespaceSystem {
 		// Operator is running in system namespace
-		// Do nothing, we already have len(config.WatchNamespaces) == 0
+		// Do nothing, Watch.Namespaces.Include is already empty (= watch all)
 	} else {
 		// Operator is running inside a namespace. Watch in it
 		c.Watch.Namespaces.Include = types.NewStrings([]string{
@@ -1344,6 +1501,24 @@ func (c *OperatorConfig) copyWithHiddenCredentials() *OperatorConfig {
 	conf.CHPassword = PasswordReplacer
 
 	return conf
+}
+
+// RestartOnOperatorConfigurationChange reports whether the operator process should exit when
+// ClickHouseOperatorConfiguration changes (so the pod restarts).
+func (c *OperatorConfig) RestartOnOperatorConfigurationChange() bool {
+	return strings.ToLower(c.Watch.Configuration.OnChange.String()) == OnConfigurationChangeRestart
+}
+
+// ShouldRecoverAbortedOnPodReady reports whether the operator should re-enqueue a CHI
+// reconcile when a pod belonging to an Aborted CHI transitions to Ready. Default is to retry.
+// Backed by reconcile.recovery.from.aborted.onPodReady config key.
+func (c *OperatorConfig) ShouldRecoverAbortedOnPodReady() bool {
+	value := strings.ToLower(c.Reconcile.Recovery.From.Aborted.OnPodReady.String())
+	if value == "" {
+		// Default behavior — retry
+		return true
+	}
+	return value == RecoveryActionRetry
 }
 
 // IsNamespaceWatched returns whether specified namespace is in a list of watched

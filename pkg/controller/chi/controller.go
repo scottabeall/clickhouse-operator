@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -33,6 +34,7 @@ import (
 	kubeTypes "k8s.io/apimachinery/pkg/types"
 	utilRuntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/dynamic"
 	kubeInformers "k8s.io/client-go/informers"
 	kube "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -68,9 +70,10 @@ type Controller struct {
 	//
 	// Native clients
 	//
-	kubeClient kube.Interface
-	extClient  apiExtensions.Interface
-	chopClient chopClientSet.Interface
+	kubeClient    kube.Interface
+	extClient     apiExtensions.Interface
+	chopClient    chopClientSet.Interface
+	dynamicClient dynamic.Interface
 
 	// queues used to organize events queue processed by the operator
 	queues []queue.PriorityQueue
@@ -87,6 +90,8 @@ func NewController(
 	chopClient chopClientSet.Interface,
 	extClient apiExtensions.Interface,
 	kubeClient kube.Interface,
+	dynamicClient dynamic.Interface,
+	chopConfigInformerFactory chopInformers.SharedInformerFactory,
 	chopInformerFactory chopInformers.SharedInformerFactory,
 	kubeInformerFactory kubeInformers.SharedInformerFactory,
 ) *Controller {
@@ -114,17 +119,18 @@ func NewController(
 
 	// Create Controller instance
 	controller := &Controller{
-		kubeClient:  kubeClient,
-		extClient:   extClient,
-		chopClient:  chopClient,
-		recorder:    recorder,
-		namer:       namer,
-		kube:        kube,
-		ctrlLabeler: ctrlLabeler.New(kube),
-		pvcDeleter:  volume.NewPVCDeleter(managers.NewNameManager(managers.NameManagerTypeClickHouse)),
+		kubeClient:    kubeClient,
+		extClient:     extClient,
+		chopClient:    chopClient,
+		dynamicClient: dynamicClient,
+		recorder:      recorder,
+		namer:         namer,
+		kube:          kube,
+		ctrlLabeler:   ctrlLabeler.New(kube),
+		pvcDeleter:    volume.NewPVCDeleter(managers.NewNameManager(managers.NameManagerTypeClickHouse)),
 	}
 	controller.initQueues()
-	controller.addEventHandlers(chopInformerFactory, kubeInformerFactory)
+	controller.addEventHandlers(chopConfigInformerFactory, chopInformerFactory, kubeInformerFactory)
 
 	return controller
 }
@@ -214,32 +220,22 @@ func (c *Controller) addEventHandlersCHIT(
 }
 
 func (c *Controller) addEventHandlersChopConfig(
-	chopInformerFactory chopInformers.SharedInformerFactory,
+	chopConfigInformerFactory chopInformers.SharedInformerFactory,
 ) {
-	chopInformerFactory.Clickhouse().V1().ClickHouseOperatorConfigurations().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	chopConfigInformerFactory.Clickhouse().V1().ClickHouseOperatorConfigurations().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			chopConfig := obj.(*api.ClickHouseOperatorConfiguration)
-			if !chop.Config().IsNamespaceWatched(chopConfig.Namespace) {
-				log.V(2).M(chopConfig).Info("chopInformer: skip event, namespace '%s' is not watched or is in deny list", chopConfig.Namespace)
-				return
-			}
 			log.V(3).M(chopConfig).Info("chopInformer.AddFunc")
 			c.enqueueObject(cmd_queue.NewReconcileChopConfig(cmd_queue.ReconcileAdd, nil, chopConfig))
 		},
 		UpdateFunc: func(old, new interface{}) {
 			newChopConfig := new.(*api.ClickHouseOperatorConfiguration)
 			oldChopConfig := old.(*api.ClickHouseOperatorConfiguration)
-			if !chop.Config().IsNamespaceWatched(newChopConfig.Namespace) {
-				return
-			}
 			log.V(3).M(newChopConfig).Info("chopInformer.UpdateFunc")
 			c.enqueueObject(cmd_queue.NewReconcileChopConfig(cmd_queue.ReconcileUpdate, oldChopConfig, newChopConfig))
 		},
 		DeleteFunc: func(obj interface{}) {
 			chopConfig := obj.(*api.ClickHouseOperatorConfiguration)
-			if !chop.Config().IsNamespaceWatched(chopConfig.Namespace) {
-				return
-			}
 			log.V(3).M(chopConfig).Info("chopInformer.DeleteFunc")
 			c.enqueueObject(cmd_queue.NewReconcileChopConfig(cmd_queue.ReconcileDelete, chopConfig, nil))
 		},
@@ -533,12 +529,13 @@ func (c *Controller) addEventHandlersPod(
 
 // addEventHandlers
 func (c *Controller) addEventHandlers(
+	chopConfigInformerFactory chopInformers.SharedInformerFactory,
 	chopInformerFactory chopInformers.SharedInformerFactory,
 	kubeInformerFactory kubeInformers.SharedInformerFactory,
 ) {
+	c.addEventHandlersChopConfig(chopConfigInformerFactory)
 	c.addEventHandlersCHI(chopInformerFactory)
 	c.addEventHandlersCHIT(chopInformerFactory)
-	c.addEventHandlersChopConfig(chopInformerFactory)
 	c.addEventHandlersService(kubeInformerFactory)
 	//c.addEventHandlersEndpoints(kubeInformerFactory)
 	c.addEventHandlersEndpointSlice(kubeInformerFactory)
@@ -755,10 +752,8 @@ func (c *Controller) addChopConfig(chopConfig *api.ClickHouseOperatorConfigurati
 	if chop.Get().ConfigManager.IsConfigListed(chopConfig) {
 		log.V(1).M(chopConfig).F().Info("already known config - do nothing")
 	} else {
-		log.V(1).M(chopConfig).F().Info("new, previously unknown config, need to apply")
-		// TODO
-		// NEED REFACTORING
-		// os.Exit(0)
+		log.V(1).M(chopConfig).F().Info("new, previously unknown config")
+		c.restartOperatorOnConfigChange("ClickHouseOperatorConfiguration added")
 	}
 
 	return nil
@@ -773,21 +768,27 @@ func (c *Controller) updateChopConfig(old, new *api.ClickHouseOperatorConfigurat
 	}
 
 	log.V(2).M(new).F().Info("ResourceVersion change: %s to %s", old.GetObjectMeta().GetResourceVersion(), new.GetObjectMeta().GetResourceVersion())
-	// TODO
-	// NEED REFACTORING
-	//os.Exit(0)
+	c.restartOperatorOnConfigChange("ClickHouseOperatorConfiguration updated")
 
 	return nil
 }
 
-// deleteChit deletes CHIT
+// deleteChopConfig deletes CHOPCONF
 func (c *Controller) deleteChopConfig(chopConfig *api.ClickHouseOperatorConfiguration) error {
 	log.V(2).M(chopConfig).F().P()
-	// TODO
-	// NEED REFACTORING
-	//os.Exit(0)
+	c.restartOperatorOnConfigChange("ClickHouseOperatorConfiguration deleted")
 
 	return nil
+}
+
+func (c *Controller) restartOperatorOnConfigChange(reason string) {
+	if !chop.Config().RestartOnOperatorConfigurationChange() {
+		log.V(1).Info("Operator restart on configuration change is disabled")
+		return
+	}
+
+	log.Info("Operator restart requested: %s", reason)
+	os.Exit(0)
 }
 
 type patchFinalizers struct {

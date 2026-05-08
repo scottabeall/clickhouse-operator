@@ -1,0 +1,36 @@
+apiVersion: "clickhouse.altinity.com/v1"
+kind: "ClickHouseInstallation"
+metadata:
+  name: test-062-hooks
+spec:
+  defaults:
+    templates:
+      podTemplate: default
+  useTemplates:
+    - name: clickhouse-version
+  reconcile:
+    host:
+      hooks:
+        pre:
+          - sql:
+              queries:
+                - "SELECT 'host_onshutdown_hook_marker'"
+            events:
+              - HostShutdown
+  configuration:
+    # Adding a server-level setting forces a software restart on the existing host
+    # (shouldForceRestartHost → true via IsConfigurationChangeRequiresReboot). That
+    # triggers HostConfigRestart → HostShutdown → the events:[HostShutdown] hook fires.
+    #
+    # IMPORTANT: pick a setting that's NOT in the operator's hot-reload exception
+    # list (see pkg/model/chop_config.go's configurationRestartPolicy rules — e.g.
+    # max_concurrent_queries is explicitly "no restart needed"). mark_cache_size
+    # is a server-level cache size, not in the exception list, so it triggers
+    # restart.
+    settings:
+      mark_cache_size: "10000000"
+    clusters:
+      - name: default
+        layout:
+          shardsCount: 1
+          replicasCount: 1

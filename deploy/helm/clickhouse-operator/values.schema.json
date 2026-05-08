@@ -319,6 +319,15 @@
                                         "metrics": {
                                             "type": "object",
                                             "properties": {
+                                                "excludeRegexp": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "tablesRegexp": {
+                                                    "type": "string"
+                                                },
                                                 "timeouts": {
                                                     "type": "object",
                                                     "properties": {
@@ -505,6 +514,25 @@
                                                     }
                                                 }
                                             }
+                                        },
+                                        "recovery": {
+                                            "type": "object",
+                                            "properties": {
+                                                "from": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "aborted": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "onPodReady": {
+                                                                    "type": "string",
+                                                                    "enum": ["", "none", "None", "retry", "Retry"]
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 },
@@ -569,7 +597,16 @@
                                     "type": "object",
                                     "properties": {
                                         "namespaces": {
-                                            "type": "array"
+                                            "type": ["array", "object"]
+                                        },
+                                        "configuration": {
+                                            "type": "object",
+                                            "properties": {
+                                                "onChange": {
+                                                    "type": "string",
+                                                    "enum": ["none", "None", "ignore", "Ignore", "restart", "Restart"]
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -635,6 +672,49 @@
                 }
             }
         },
+        "crdHook": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "image": {
+                    "type": "object",
+                    "properties": {
+                        "repository": {
+                            "type": "string"
+                        },
+                        "tag": {
+                            "type": "string"
+                        },
+                        "pullPolicy": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "imagePullSecrets": {
+                    "type": "array"
+                },
+                "resources": {
+                    "type": "object"
+                },
+                "nodeSelector": {
+                    "type": "object"
+                },
+                "tolerations": {
+                    "type": "array"
+                },
+                "affinity": {
+                    "type": "object"
+                },
+                "annotations": {
+                    "type": "object"
+                },
+                "containerSecurityContext": {
+                    "type": "object"
+                }
+            }
+        },
         "dashboards": {
             "type": "object",
             "properties": {
@@ -694,6 +774,14 @@
                     "description": "additional environment variables for the deployment of metrics-exporter containers possible format value `[{\"name\": \"SAMPLE\", \"value\": \"text\"}]`",
                     "type": "array"
                 },
+                "livenessProbe": {
+                    "description": "optional liveness probe for the metrics-exporter container, check `kubectl explain pod.spec.containers.livenessProbe` for details",
+                    "type": ["object", "null"]
+                },
+                "readinessProbe": {
+                    "description": "optional readiness probe for the metrics-exporter container, check `kubectl explain pod.spec.containers.readinessProbe` for details",
+                    "type": ["object", "null"]
+                },
                 "image": {
                     "type": "object",
                     "properties": {
@@ -738,6 +826,10 @@
                     "description": "additional environment variables for the clickhouse-operator container in deployment possible format value `[{\"name\": \"SAMPLE\", \"value\": \"text\"}]`",
                     "type": "array"
                 },
+                "livenessProbe": {
+                    "description": "optional liveness probe for the clickhouse-operator container, check `kubectl explain pod.spec.containers.livenessProbe` for details",
+                    "type": ["object", "null"]
+                },
                 "image": {
                     "type": "object",
                     "properties": {
@@ -758,6 +850,10 @@
                 "priorityClassName": {
                     "description": "priority class name for the clickhouse-operator deployment, check `kubectl explain pod.spec.priorityClassName` for details",
                     "type": "string"
+                },
+                "readinessProbe": {
+                    "description": "optional readiness probe for the clickhouse-operator container, check `kubectl explain pod.spec.containers.readinessProbe` for details",
+                    "type": ["object", "null"]
                 },
                 "resources": {
                     "description": "custom resource configuration, check `kubectl explain pod.spec.containers.resources` for details",

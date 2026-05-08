@@ -59,7 +59,9 @@ func (w *worker) clean(ctx context.Context, cr api.ICustomResource) {
 		util.WaitContextDoneOrTimeout(ctx, 1*time.Minute)
 	}
 
-	cr.(*api.ClickHouseInstallation).EnsureStatus().SyncHostTablesCreated()
+	st := cr.(*api.ClickHouseInstallation).EnsureStatus()
+	st.SyncHostTablesCreated()
+	st.SyncHostsWithReplicaCaughtUp()
 }
 
 // dropZKReplicas cleans Zookeeper for replicas that are properly deleted - via Action Plan
@@ -382,7 +384,7 @@ func (w *worker) hasHostVolumesToRetain(ctx context.Context, host *api.Host) (ha
 	// Check whether among all PVCs host has reclaim policy "retain" specified
 	storage.NewStoragePVC(w.c.kube.Storage()).WalkDiscoveredPVCs(ctx, host, func(pvc *core.PersistentVolumeClaim) {
 		if chiLabeler.New(nil).GetReclaimPolicy(pvc.GetObjectMeta()) == api.PVCReclaimPolicyRetain {
-			w.a.V(1).F().Info("PVC: %s/%s blocks drop replica. Reclaim policy: %s", api.PVCReclaimPolicyRetain.String())
+			w.a.V(1).F().Info("PVC: %s/%s blocks drop replica. Reclaim policy: %s", pvc.Namespace, pvc.Name, api.PVCReclaimPolicyRetain.String())
 			has = true
 		}
 	})
@@ -543,6 +545,28 @@ func (w *worker) deleteHost(ctx context.Context, chi *api.ClickHouseInstallation
 			Info("Delete host: %s/%s - completed StatefulSet not found - already deleted? err: %v",
 				host.Runtime.Address.ClusterName, host.GetName(), err)
 		return nil
+	}
+
+	// Pre-delete host hooks: run BEFORE we touch the host's k8s objects so the pod is
+	// still up and SQL hooks can drain / de-register it. A pre-delete hook with
+	// failurePolicy=Fail (default) aborts deletion — leaves the host in place for the
+	// user to fix and re-reconcile (similar to admission-webhook failurePolicy=Fail).
+	// failurePolicy=Ignore logs a warning and proceeds with deletion.
+	// Unreachable hosts skip hooks with a warning rather than blocking deletion.
+	//
+	// Policy gating happens upstream in runHostHookActions, NOT here:
+	//   - hook succeeds                        → returns nil
+	//   - hook fails + failurePolicy=Ignore    → returns nil (warning logged inside)
+	//   - hook fails + failurePolicy=Fail      → returns the error
+	//   - host unreachable / no hooks defined  → returns nil
+	// So a non-nil err here means the user explicitly opted into "abort deletion on
+	// hook failure" via failurePolicy=Fail; just propagating it suffices.
+	if err := w.runHostPreDeleteHooks(ctx, host); err != nil {
+		w.a.WithEvent(host.GetCR(), a.EventActionDelete, a.EventReasonDeleteFailed).
+			WithError(host.GetCR()).
+			M(host).F().
+			Error("Pre-delete hook failed for host %s/%s: %v", host.Runtime.Address.ClusterName, host.GetName(), err)
+		return err
 	}
 
 	// Each host consists of

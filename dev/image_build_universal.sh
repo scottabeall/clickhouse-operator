@@ -31,10 +31,48 @@ if [[ "${MINIKUBE}" == "yes" ]]; then
     eval "$(minikube docker-env)"
 fi
 
+if ! command -v docker >/dev/null 2>&1; then
+    echo "ERROR: docker CLI not found in PATH." >&2
+    echo "Install Docker Desktop, or another engine with a client, and ensure the \`docker\` command works." >&2
+    echo "Note: MINIKUBE=yes runs \`minikube docker-env\` so builds use Minikube's Docker daemon, but you still need the Docker *client* on this machine." >&2
+    exit 1
+fi
+
+# BuildKit reads credsStore from config.json and runs docker-credential-<store>. If that binary is not on PATH
+# (common with incomplete Docker Desktop PATH, Colima, or SSH sessions), pulls fail with:
+#   exec: "docker-credential-desktop": executable file not found in $PATH
+# Public base images do not need credentials; use a minimal config for this process only.
+chop_docker_config_without_creds_if_helper_missing() {
+    local cfg=""
+    if [[ -n "${DOCKER_CONFIG:-}" && -f "${DOCKER_CONFIG}/config.json" ]]; then
+        cfg="${DOCKER_CONFIG}/config.json"
+    elif [[ -f "${HOME}/.docker/config.json" ]]; then
+        cfg="${HOME}/.docker/config.json"
+    else
+        return 0
+    fi
+    local store
+    store=$(sed -n 's/.*"credsStore"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${cfg}" | head -1)
+    [[ -n "${store}" ]] || return 0
+    if command -v "docker-credential-${store}" >/dev/null 2>&1; then
+        return 0
+    fi
+    export CHOP_SAVED_DOCKER_CONFIG="${DOCKER_CONFIG:-}"
+    export DOCKER_CONFIG="$(mktemp -d)"
+    echo '{}' > "${DOCKER_CONFIG}/config.json"
+    echo "NOTE: ${cfg} sets credsStore=${store} but docker-credential-${store} is not in PATH." >&2
+    echo "Using temporary DOCKER_CONFIG=${DOCKER_CONFIG} for this build (public image pulls only)." >&2
+    echo "To fix permanently: add Docker's bin to PATH, or remove credsStore from ${cfg}, or install the matching helper." >&2
+}
+chop_docker_config_without_creds_if_helper_missing
+
+# Minikube dev images are linux/amd64-only; skip host qemu/binfmt setup (needs docker run).
 # In case architecture of the host we are building on is arm，such as MacOS M1/M2, no need to install qemu
 # We may need to install qemu otherwise
 ARCHITECTURE=$(uname -m)
-if [[ "${ARCHITECTURE}" =~ "arm" ]]; then
+if [[ "${MINIKUBE}" == "yes" ]]; then
+    echo "MINIKUBE=yes: skipping multiarch/qemu-user-static setup (single-platform amd64 build)."
+elif [[ "${ARCHITECTURE}" =~ "arm" ]]; then
     echo "Build host is arm and does not need qemu to be installed"
 else
     echo "Need qemu to be installed on build host"
@@ -80,7 +118,9 @@ DOCKER_CMD="docker buildx build --progress plain"
 # Append arch
 if [[ "${DOCKER_IMAGE}" =~ ":dev" || "${MINIKUBE}" == "yes" ]]; then
     echo "Build image (dev) for amd64 only, skip arm arch."
-    DOCKER_CMD="${DOCKER_CMD} --platform=linux/amd64 --output type=docker --output type=image,name=${DOCKER_IMAGE}"
+    # Single --load into local docker (replaces invalid double --output: type=docker + type=image;
+    # buildx errors: "multiple outputs currently unsupported".)
+    DOCKER_CMD="${DOCKER_CMD} --platform=linux/amd64 --load"
 else
     echo "Build image for both amd64 and arm64."
     DOCKER_CMD="${DOCKER_CMD} --platform=linux/amd64,linux/arm64"
@@ -91,7 +131,7 @@ DOCKER_CMD="${DOCKER_CMD} --build-arg VERSION=${VERSION:-dev} --build-arg GO_VER
 
 # Append GC flags if present
 if [[ ! -z "${GCFLAGS}" ]]; then
-    DOCKER_CMD="--build-arg GCFLAGS='${GCFLAGS}'"
+    DOCKER_CMD="${DOCKER_CMD} --build-arg GCFLAGS='${GCFLAGS}'"
 fi
 
 # Append repo push

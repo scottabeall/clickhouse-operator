@@ -7,6 +7,13 @@
 1. Zookeeper [installed][zookeeper_setup.md]
 
 
+## ZooKeeper / Keeper Configuration
+
+There are two ways to configure ZooKeeper/Keeper connectivity:
+
+1. **Explicit nodes** — specify `host:port` directly in `spec.configuration.zookeeper.nodes`
+2. **Keeper reference** — reference a `ClickHouseKeeperInstallation` by name in `spec.configuration.zookeeper.keeper` and the operator resolves endpoints automatically. See [Keeper Reference](keeper_reference.md) for details.
+
 ## Manifest
 
 Let's take a look on [example][chi-examples/04-replication-zookeeper-05-simple-PV.yaml], which creates a cluster with 2 shards and 2 replicas and persistent storage.

@@ -57,6 +57,7 @@ type HostSettings struct {
 	Files    *Settings `json:"files,omitempty"               yaml:"files,omitempty"`
 }
 
+// +k8s:deepcopy-gen=false
 type HostRuntime struct {
 	// Internal data
 	Address             HostAddress                `json:"-" yaml:"-"`
@@ -71,6 +72,46 @@ type HostRuntime struct {
 	DesiredStatefulSet *apps.StatefulSet `json:"-" yaml:"-" testdiff:"ignore"`
 
 	cr ICustomResource `json:"-" yaml:"-" testdiff:"ignore"`
+}
+
+// DeepCopyInto clones HostRuntime by value, deep-copying the heap fields that have
+// their own DeepCopy methods. The unexported `cr ICustomResource` back-pointer is
+// intentionally aliased: it's a pointer back to the owning CR, and the caller is
+// expected to re-bind it via FillCR/SetCR after copying the surrounding tree.
+func (r *HostRuntime) DeepCopyInto(out *HostRuntime) {
+	*out = *r
+	if r.Version != nil {
+		in, out := &r.Version, &out.Version
+		*out = (*in).DeepCopy()
+	}
+	if r.reconcileAttributes != nil {
+		in, out := &r.reconcileAttributes, &out.reconcileAttributes
+		*out = (*in).DeepCopy()
+	}
+	if r.replicas != nil {
+		in, out := &r.replicas, &out.replicas
+		*out = new(types.Int32)
+		**out = **in
+	}
+	if r.CurStatefulSet != nil {
+		in, out := &r.CurStatefulSet, &out.CurStatefulSet
+		*out = new(apps.StatefulSet)
+		(*in).DeepCopyInto(*out)
+	}
+	if r.DesiredStatefulSet != nil {
+		in, out := &r.DesiredStatefulSet, &out.DesiredStatefulSet
+		*out = new(apps.StatefulSet)
+		(*in).DeepCopyInto(*out)
+	}
+}
+
+func (r *HostRuntime) DeepCopy() *HostRuntime {
+	if r == nil {
+		return nil
+	}
+	out := new(HostRuntime)
+	r.DeepCopyInto(out)
+	return out
 }
 
 func (r *HostRuntime) GetAddress() IHostAddress {
@@ -552,11 +593,52 @@ const (
 	ChDefaultInterserverHTTPPortNumber = int32(9009)
 
 	// Keeper open ports names and values
-	KpDefaultZKPortName     = "zk"
-	KpDefaultZKPortNumber   = int32(2181)
-	KpDefaultRaftPortName   = "raft"
-	KpDefaultRaftPortNumber = int32(9444)
+	KpDefaultZKPortName         = "zk"
+	KpDefaultZKPortNumber       = int32(2181)
+	KpDefaultZKSecurePortName   = "zk-secure"
+	KpDefaultZKSecurePortNumber = int32(2281)
+	KpDefaultRaftPortName       = "raft"
+	KpDefaultRaftPortNumber     = int32(9444)
 )
+
+// ZKPortInfo holds the extracted ZooKeeper port and whether it's a secure (TLS) port.
+type ZKPortInfo struct {
+	Port   int32
+	Secure bool
+}
+
+// ExtractZKPort extracts the ZooKeeper client port from a Kubernetes service port list.
+// Matches by port name (KpDefaultZKPortName) or port number (KpDefaultZKPortNumber).
+// Returns KpDefaultZKPortNumber if no matching port is found.
+func ExtractZKPort(ports []core.ServicePort) int32 {
+	return ExtractZKPortInfo(ports).Port
+}
+
+// ExtractZKPortInfo extracts the ZooKeeper client port and TLS flag from a service port list.
+// Prefers the secure port if available; falls back to insecure port.
+func ExtractZKPortInfo(ports []core.ServicePort) ZKPortInfo {
+	// Prefer secure port if available
+	for _, p := range ports {
+		if p.Name == KpDefaultZKSecurePortName || p.Port == KpDefaultZKSecurePortNumber {
+			return ZKPortInfo{
+				Port:   p.Port,
+				Secure: true,
+			}
+		}
+	}
+	for _, p := range ports {
+		if p.Name == KpDefaultZKPortName || p.Port == KpDefaultZKPortNumber {
+			return ZKPortInfo{
+				Port:   p.Port,
+				Secure: false,
+			}
+		}
+	}
+	return ZKPortInfo{
+		Port:   KpDefaultZKPortNumber,
+		Secure: false,
+	}
+}
 
 func (host *Host) WalkPorts(f func(name string, port *types.Int32, protocol core.Protocol) bool) {
 	if host == nil {

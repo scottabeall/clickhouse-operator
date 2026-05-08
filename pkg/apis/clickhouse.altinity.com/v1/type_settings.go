@@ -587,6 +587,7 @@ func (s *Settings) AsSortedSliceOfStrings() []string {
 	return res
 }
 
+// +k8s:deepcopy-gen=false
 type SettingsNormalizerOptions struct {
 	Replacers []*util.Replacer
 }

@@ -1,15 +1,14 @@
 apiVersion: "clickhouse.altinity.com/v1"
 kind: "ClickHouseInstallation"
 metadata:
-  name: test-051-clickhouse-keeper-upgrade
+  name: test-063-keeper-ref
 spec:
   useTemplates:
     - name: clickhouse-version
   configuration:
     zookeeper:
-      nodes:
-        - host: test-051-chk
-          port: 2181
+      keeper:
+        name: test-063-chk
     clusters:
       - name: default
         layout:

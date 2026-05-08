@@ -385,6 +385,9 @@ func (cr *ClickHouseKeeperInstallation) GetServiceTemplates(names ...string) ([]
 
 // GetRootServiceTemplates gets service templates of a CR
 func (cr *ClickHouseKeeperInstallation) GetRootServiceTemplates() ([]*apiChi.ServiceTemplate, bool) {
+	if cr == nil {
+		return nil, false
+	}
 	if !cr.GetSpecT().GetDefaults().Templates.HasAnyServiceTemplate() {
 		return nil, false
 	}

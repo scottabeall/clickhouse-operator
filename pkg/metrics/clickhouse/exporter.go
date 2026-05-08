@@ -31,6 +31,7 @@ import (
 	"github.com/altinity/clickhouse-operator/pkg/chop"
 	chopAPI "github.com/altinity/clickhouse-operator/pkg/client/clientset/versioned"
 	"github.com/altinity/clickhouse-operator/pkg/controller"
+	"github.com/altinity/clickhouse-operator/pkg/metrics/clickhouse/filters"
 	chiNormalizer "github.com/altinity/clickhouse-operator/pkg/model/chi/normalizer"
 	"github.com/altinity/clickhouse-operator/pkg/model/clickhouse"
 	normalizerCommon "github.com/altinity/clickhouse-operator/pkg/model/common/normalizer"
@@ -40,16 +41,28 @@ import (
 type Exporter struct {
 	collectorTimeout time.Duration
 	registry         *CRRegistry
+	metricsFilter    MetricsFilter
 }
 
 // Type compatibility
 var _ prometheus.Collector = &Exporter{}
+var _ MetricsFilter = &filters.Regexp{}
 
 // NewExporter returns a new instance of Exporter type
 func NewExporter(registry *CRRegistry, collectorTimeout time.Duration) *Exporter {
+	excludeRegexps := chop.Config().ClickHouse.Metrics.ExcludeRegexp
+	// Make active exclusions discoverable in operator logs so users hitting silent
+	// metric loss (e.g. CPU/OS series filtered by the default pattern) can find the
+	// cause via `kubectl logs metrics-exporter`.
+	if len(excludeRegexps) == 0 {
+		log.Info("Metrics exporter: no exclusion regexps configured")
+	} else {
+		log.Infof("Metrics exporter: excluding metric names matching %v", excludeRegexps)
+	}
 	return &Exporter{
 		registry:         registry,
 		collectorTimeout: collectorTimeout,
+		metricsFilter:    filters.NewRegexp(excludeRegexps),
 	}
 }
 
@@ -93,7 +106,7 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 func (e *Exporter) collectHostMetrics(ctx context.Context, chi *metrics.WatchedCR, host *metrics.WatchedHost, c chan<- prometheus.Metric) {
 	collector := NewCollector(
 		e.newHostFetcher(host),
-		NewCHIPrometheusWriter(c, chi, host),
+		NewCHIPrometheusWriter(c, chi, host, e.metricsFilter),
 	)
 	collector.CollectHostMetrics(ctx, host)
 }

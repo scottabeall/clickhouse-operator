@@ -227,13 +227,13 @@ func (w *worker) deleteCRProtocol(ctx context.Context, chk *apiChk.ClickHouseKee
 	w.newTask(normalized, nil)
 
 	// Delete the CR-level service explicitly (may not appear in discovery)
-	_ = w.c.deleteServiceCR(ctx, chk)
+	_ = w.c.deleteServiceCR(ctx, normalized)
 
 	// Discover all existing owned objects and purge them.
 	// Passing an empty reconcileFailedObjs registry means every discovered object is
 	// treated as "unknown" and purged according to the UnknownObjects cleanup policy.
 	// purgePVC additionally gates deletion on the reclaimPolicy label (Retain/Delete).
-	objs := w.c.discovery(ctx, chk)
+	objs := w.c.discovery(ctx, normalized)
 	w.purge(ctx, normalized, objs, model.NewRegistry())
 	return nil
 }

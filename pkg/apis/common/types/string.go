@@ -14,6 +14,8 @@
 
 package types
 
+import "strings"
+
 // String defines string representation with possibility to be optional
 type String string
 
@@ -69,6 +71,28 @@ func (s *String) Normalize(defaultValue string) *String {
 
 	// Value is unrecognized, return default value
 	return NewString(defaultValue)
+}
+
+// Equal reports whether s and other hold the same value.
+// Nil is treated as a distinct "unset" state: nil == nil is true; nil vs a non-nil
+// pointer (even one holding "") is FALSE — an unset pointer is not the same as an
+// explicitly empty value. Comparison is case-sensitive; use EqualFold for the
+// case-insensitive variant.
+func (s *String) Equal(other *String) bool {
+	if (s == nil) || (other == nil) {
+		return s == other
+	}
+	return s.Value() == other.Value()
+}
+
+// EqualFold is the case-insensitive analogue of Equal — uses strings.EqualFold for
+// the underlying value comparison. Same nil-vs-set semantics as Equal: nil == nil
+// is true; nil != non-nil regardless of the non-nil's value.
+func (s *String) EqualFold(other *String) bool {
+	if (s == nil) || (other == nil) {
+		return s == other
+	}
+	return strings.EqualFold(s.Value(), other.Value())
 }
 
 // MergeFrom merges value from another variable

@@ -165,11 +165,7 @@ def check_metrics_monitoring(
     with Then(f"metrics-exporter /metrics endpoint result should contain {expect_pattern}{expect_metric}"):
         expected_pattern_found = False
         for i in range(1, max_retries):
-            url_cmd = util.make_http_get_request("127.0.0.1", port, "/metrics")
-            out = kubectl.launch(
-                f"exec {operator_pod} -c {container} -- {url_cmd}",
-                ns=operator_namespace,
-            )
+            out = util.get_metrics(operator_pod, operator_namespace, container=container, port=port)
             if expect_metric != "":
                 lines = [m for m in out.splitlines() if m.startswith(expect_metric) and expect_labels in m]
                 if len(lines) > 0:
