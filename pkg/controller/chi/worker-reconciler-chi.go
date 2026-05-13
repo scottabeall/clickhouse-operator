@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	log "github.com/altinity/clickhouse-operator/pkg/announcer"
@@ -120,6 +121,11 @@ func (w *worker) reconcileCR(ctx context.Context, old, new *api.ClickHouseInstal
 			return nil
 		}
 
+		// Pre-delete hooks for hosts the action plan removed (scale-down). Pods are still
+		// up at this point — clean()'s purge is what tears them down — so SQL hooks can
+		// drain the dying hosts before they go away.
+		w.runHostPreDeleteHooksOnRemovedHosts(ctx, new)
+
 		w.clean(ctx, new)
 		w.addToMonitoring(new)
 		w.waitForIPAddresses(ctx, new)
@@ -135,6 +141,13 @@ func (w *worker) reconcileCR(ctx context.Context, old, new *api.ClickHouseInstal
 }
 
 func (w *worker) buildCR(ctx context.Context, _cr *api.ClickHouseInstallation) *api.ClickHouseInstallation {
+	// Resolve all keeper references before normalization — populates ZookeeperConfig.Nodes from KeeperRef
+	if err := w.resolveAllKeeperReferences(ctx, _cr); err != nil {
+		w.a.V(1).M(_cr).F().
+			WithEvent(_cr, a.EventActionReconcile, a.EventReasonReconcileFailed).
+			Warning("Failed to resolve keeper references: %v", err)
+	}
+
 	cr := w.createTemplatedCR(_cr)
 	w.newTask(cr, cr.GetAncestorT())
 	// fillCurSTS must be called before findMinMaxVersions to ensure deterministic
@@ -399,14 +412,27 @@ func (w *worker) reconcileHostStatefulSet(ctx context.Context, host *api.Host, o
 
 	w.a.V(1).M(host).F().Info("Reconcile host STS: %s. App version: %s", host.GetName(), host.Runtime.Version.Render())
 
-	// Start with force-restart host
-	if w.shouldForceRestartHost(ctx, host) {
-		w.a.V(1).M(host).F().Info("Reconcile host STS force restart: %s", host.GetName())
-		_ = w.hostForceRestart(ctx, host, opts)
-	}
-
 	w.stsReconciler.PrepareHostStatefulSetWithStatus(ctx, host, host.IsStopped())
 	opts = w.prepareStsReconcileOptsWaitSection(host, opts)
+
+	// Start with force-restart host.
+	// If a pod-template rollout is already coming via the StatefulSet reconcile below, skip
+	// the pre-rollout software restart — see hostRequiresStatefulSetRollout for why.
+	if w.shouldForceRestartHost(ctx, host) {
+		if hostRequiresStatefulSetRollout(host) {
+			w.a.V(1).M(host).F().Info("Pod template changed - skipping software restart; StatefulSet rollout will restart the pod. Host: %s", host.GetName())
+		} else {
+			w.a.V(1).M(host).F().Info("Reconcile host STS force restart: %s", host.GetName())
+			_ = w.hostForceRestart(ctx, host, opts)
+			// hostForceRestart's fallback path (hostScaleDown) overwrites DesiredStatefulSet
+			// with a shutdown spec via PrepareHostStatefulSetWithStatus(host, true). If we
+			// don't reset it back to the normal desired spec, the main ReconcileStatefulSet
+			// below would apply the shutdown spec and leave the pod at replicas=0 — breaking
+			// test_010042 (expected Aborted when bad config crashes ClickHouse — actually
+			// stayed Completed because the pod never came back up to crash).
+			w.stsReconciler.PrepareHostStatefulSetWithStatus(ctx, host, host.IsStopped())
+		}
+	}
 
 	// We are in place, where we can  reconcile StatefulSet to desired configuration.
 	w.a.V(1).M(host).F().Info("Reconcile host STS: %s. Reconcile StatefulSet", host.GetName())
@@ -429,6 +455,61 @@ func (w *worker) reconcileHostStatefulSet(ctx context.Context, host *api.Host, o
 	}
 
 	return err
+}
+
+// hostRequiresStatefulSetRollout reports whether the current reconcile introduces a
+// container env-var change that an in-place software restart CANNOT carry. The #1963
+// scenario is adding a secret-backed env var alongside a config setting that reads it via
+// from_env="..." — a software restart brings the SAME pod back with the OLD env (k8s hasn't
+// rolled the template yet), so ClickHouse fails to resolve from_env and crashes. Deferring
+// to the StatefulSet rollout instead lets k8s bring up a fresh pod with the new env.
+//
+// IMPORTANT: do NOT compare the whole PodTemplateSpec via Semantic.DeepEqual. The current
+// StatefulSet fetched from k8s has apiserver-defaulted fields (dnsPolicy, restartPolicy,
+// schedulerName, terminationMessagePath, securityContext{}, containerPort protocol,
+// ConfigMap volume DefaultMode 420, etc.) that the in-memory desired StatefulSet leaves
+// unset. A whole-template Semantic.DeepEqual would treat these as different on every
+// reconcile — falsely skipping the software restart path for config-only changes (e.g.
+// macro substitution in test_010059), which ClickHouse depends on to pick up new settings.
+//
+// We restrict the comparison to Container.Env, which is the ACTUAL signal #1963 describes
+// and which is not subject to apiserver defaulting. Container image changes are already
+// handled upstream by shouldForceRestartHost / isImageChangeRequested. Other template
+// edits (command/args, volumes, probes) would either need their own case here or would
+// go through the normal rolling-update path — not this pre-rollout-restart gate.
+//
+// NOTE: this check intentionally lives outside shouldForceRestartHost because that predicate
+// is also consulted from the exclude-from-cluster path (worker-wait-exclude-include-restart.go)
+// where pod-template-driven restarts still need the host excluded from the load balancer —
+// hiding them from shouldForceRestartHost would suppress that exclusion.
+//
+// Conservative: if either StatefulSet is missing (shouldn't happen after PrepareHostStatefulSetWithStatus
+// ran earlier in reconcileHostStatefulSet, but be defensive), returns true so we prefer the
+// STS rollout path over a potentially-bad software restart.
+//
+// Package-private and pure so it can be unit-tested without constructing a worker/controller.
+func hostRequiresStatefulSetRollout(host *api.Host) bool {
+	if host == nil {
+		return false
+	}
+	cur := host.Runtime.CurStatefulSet
+	desired := host.Runtime.DesiredStatefulSet
+
+	if cur == nil || desired == nil {
+		return true
+	}
+
+	curContainers := cur.Spec.Template.Spec.Containers
+	desiredContainers := desired.Spec.Template.Spec.Containers
+	if len(curContainers) != len(desiredContainers) {
+		return true
+	}
+	for i := range curContainers {
+		if !apiequality.Semantic.DeepEqual(curContainers[i].Env, desiredContainers[i].Env) {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *worker) hostForceRestart(ctx context.Context, host *api.Host, opts *statefulset.ReconcileOptions) error {
@@ -575,9 +656,18 @@ func (w *worker) reconcileCluster(ctx context.Context, cluster *api.Cluster) err
 	if err := w.reconcileClusterZookeeperRootPath(cluster); err != nil {
 		return err
 	}
+
+	// Cluster pre-hooks: failure aborts cluster reconcile
+	if err := w.runClusterPreHooks(ctx, cluster); err != nil {
+		return err
+	}
+
 	if err := w.reconcileClusterShardsAndHosts(ctx, cluster); err != nil {
 		return err
 	}
+
+	// Cluster post-hooks: best-effort, logged but don't fail reconcile
+	w.runClusterPostHooks(ctx, cluster)
 
 	return nil
 }
@@ -730,6 +820,11 @@ func (w *worker) reconcileHost(ctx context.Context, host *api.Host) error {
 
 	w.a.V(1).M(host).F().Info("Reconcile host: %s. App version: %s", host.GetName(), host.Runtime.Version.Render())
 
+	// Host pre-hooks: failure aborts this host's reconcile
+	if err := w.runHostPreHooks(ctx, host); err != nil {
+		return err
+	}
+
 	if err := w.reconcileHostPrepare(ctx, host); err != nil {
 		return err
 	}
@@ -766,6 +861,9 @@ func (w *worker) reconcileHost(ctx context.Context, host *api.Host) error {
 			},
 		},
 	})
+
+	// Host post-hooks: best-effort, logged but don't fail reconcile
+	w.runHostPostHooks(ctx, host)
 
 	// Host reconcile completed successfully - add it to monitoring
 	w.addHostToMonitoring(host)

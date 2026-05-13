@@ -4,14 +4,14 @@
 # SINGULAR=clickhouseinstallation
 # PLURAL=clickhouseinstallations
 # SHORT=chi
-# OPERATOR_VERSION=0.26.3
+# OPERATOR_VERSION=0.27.0
 #
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: clickhouseinstallations.clickhouse.altinity.com
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
 spec:
   group: clickhouse.altinity.com
   scope: Namespaced
@@ -1104,6 +1104,409 @@ spec:
                                     - "enabled"
                                   description: |
                                     Whether the operator during reconcile procedure should drop active replicas when replica is deleted or recreated
+                        hooks:
+                          type: object
+                          description: "hooks to execute before and after host reconcile"
+                          properties:
+                            pre:
+                              type: array
+                              description: "actions to execute before reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Reconcile lifecycle events that trigger this hook. Required, must be non-empty.
+                                      The hook is skipped on any reconcile whose classifier does not emit at least one
+                                      of the listed events. Supported values:
+                                        Any               - wildcard match: fires on every hook-evaluation point,
+                                                            including the pre-delete sweep on the dying host
+                                        HostCreate        - first reconcile that creates a host (no ancestor); best
+                                                            paired with POST hooks because PRE hooks on first creation
+                                                            are skipped (no live pod yet)
+                                        HostUpdate        - reconcile that has prior state for the host; catch-all
+                                                            for ongoing reconciles
+                                        HostStart         - host transitions from stopped to running
+                                        HostStop          - host is being stopped (current spec marks it stopped)
+                                        HostConfigRestart - in-place software restart for a configuration change
+                                        HostRollout       - pod-template change forces a StatefulSet rollout
+                                        HostShutdown      - aggregate: fires whenever the pod is going down for any
+                                                            reason (Stop, ConfigRestart, Rollout, or Delete)
+                                        HostDelete        - host is being removed from the cluster (downsize); fires
+                                                            on the dying host before tear-down. Always emitted
+                                                            alongside HostShutdown.
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "HostCreate"
+                                        - "hostcreate"
+                                        - "HostDelete"
+                                        - "hostdelete"
+                                        - "HostUpdate"
+                                        - "hostupdate"
+                                        - "HostStart"
+                                        - "hoststart"
+                                        - "HostStop"
+                                        - "hoststop"
+                                        - "HostConfigRestart"
+                                        - "hostconfigrestart"
+                                        - "HostRollout"
+                                        - "hostrollout"
+                                        - "HostShutdown"
+                                        - "hostshutdown"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default): error propagates — pre-hook aborts reconcile / host deletion.
+                                      Ignore: error is logged and the reconcile continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
+                            post:
+                              type: array
+                              description: "actions to execute after reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Reconcile lifecycle events that trigger this hook. Required, must be non-empty.
+                                      The hook is skipped on any reconcile whose classifier does not emit at least one
+                                      of the listed events. Supported values:
+                                        Any               - wildcard match: fires on every hook-evaluation point,
+                                                            including the pre-delete sweep on the dying host
+                                        HostCreate        - first reconcile that creates a host (no ancestor); best
+                                                            paired with POST hooks because PRE hooks on first creation
+                                                            are skipped (no live pod yet)
+                                        HostUpdate        - reconcile that has prior state for the host; catch-all
+                                                            for ongoing reconciles
+                                        HostStart         - host transitions from stopped to running
+                                        HostStop          - host is being stopped (current spec marks it stopped)
+                                        HostConfigRestart - in-place software restart for a configuration change
+                                        HostRollout       - pod-template change forces a StatefulSet rollout
+                                        HostShutdown      - aggregate: fires whenever the pod is going down for any
+                                                            reason (Stop, ConfigRestart, Rollout, or Delete)
+                                        HostDelete        - host is being removed from the cluster (downsize); fires
+                                                            on the dying host before tear-down. Always emitted
+                                                            alongside HostShutdown.
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "HostCreate"
+                                        - "hostcreate"
+                                        - "HostDelete"
+                                        - "hostdelete"
+                                        - "HostUpdate"
+                                        - "hostupdate"
+                                        - "HostStart"
+                                        - "hoststart"
+                                        - "HostStop"
+                                        - "hoststop"
+                                        - "HostConfigRestart"
+                                        - "hostconfigrestart"
+                                        - "HostRollout"
+                                        - "hostrollout"
+                                        - "HostShutdown"
+                                        - "hostshutdown"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default): error propagates — pre-hook aborts reconcile / host deletion.
+                                      Ignore: error is logged and the reconcile continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
+                    cluster:
+                      type: object
+                      description: |
+                        CHI-level cluster reconcile defaults inherited by every cluster's
+                        spec.configuration.clusters[N].reconcile section. Use this as a single
+                        place to define cluster-level hooks that should apply to all clusters
+                        in this CHI; per-cluster hooks (under clusters[N].reconcile.hooks)
+                        are appended to (and dedup'd against) the inherited set.
+                      properties:
+                        hooks:
+                          type: object
+                          description: "cluster-level hooks inherited by every cluster"
+                          properties:
+                            pre:
+                              type: array
+                              description: "actions to execute before each cluster reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Cluster-scope reconcile lifecycle events. Required, non-empty.
+                                        Any              - wildcard match: fires on every cluster reconcile pass
+                                                           and the cluster delete sweep
+                                        ClusterCreate    - all hosts in the cluster are new (no ancestor); fires
+                                                           only on the first reconcile of a brand-new cluster
+                                        ClusterReconcile - ongoing reconcile pass over an existing cluster (at
+                                                           least one host has prior state). Fires on every
+                                                           operator reconcile cycle the upstream gates allow,
+                                                           including taskID-only force-reconciles. NOT a "spec
+                                                           changed" signal.
+                                        ClusterDelete    - cluster is being removed (delete sweep — wiring follow-up)
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "ClusterCreate"
+                                        - "clustercreate"
+                                        - "ClusterDelete"
+                                        - "clusterdelete"
+                                        - "ClusterReconcile"
+                                        - "clusterreconcile"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default) propagates the error; Ignore logs a warning and continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
+                            post:
+                              type: array
+                              description: "actions to execute after each cluster reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Cluster-scope reconcile lifecycle events. Required, non-empty.
+                                        Any              - wildcard match: fires on every cluster reconcile pass
+                                                           and the cluster delete sweep
+                                        ClusterCreate    - all hosts in the cluster are new (no ancestor); fires
+                                                           only on the first reconcile of a brand-new cluster
+                                        ClusterReconcile - ongoing reconcile pass over an existing cluster (at
+                                                           least one host has prior state). Fires on every
+                                                           operator reconcile cycle the upstream gates allow,
+                                                           including taskID-only force-reconciles. NOT a "spec
+                                                           changed" signal.
+                                        ClusterDelete    - cluster is being removed (delete sweep — wiring follow-up)
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "ClusterCreate"
+                                        - "clustercreate"
+                                        - "ClusterDelete"
+                                        - "clusterdelete"
+                                        - "ClusterReconcile"
+                                        - "clusterreconcile"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default) propagates the error; Ignore logs a warning and continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
                 reconcile:
                   type: object
                   # nullable: true
@@ -1792,6 +2195,409 @@ spec:
                                     - "enabled"
                                   description: |
                                     Whether the operator during reconcile procedure should drop active replicas when replica is deleted or recreated
+                        hooks:
+                          type: object
+                          description: "hooks to execute before and after host reconcile"
+                          properties:
+                            pre:
+                              type: array
+                              description: "actions to execute before reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Reconcile lifecycle events that trigger this hook. Required, must be non-empty.
+                                      The hook is skipped on any reconcile whose classifier does not emit at least one
+                                      of the listed events. Supported values:
+                                        Any               - wildcard match: fires on every hook-evaluation point,
+                                                            including the pre-delete sweep on the dying host
+                                        HostCreate        - first reconcile that creates a host (no ancestor); best
+                                                            paired with POST hooks because PRE hooks on first creation
+                                                            are skipped (no live pod yet)
+                                        HostUpdate        - reconcile that has prior state for the host; catch-all
+                                                            for ongoing reconciles
+                                        HostStart         - host transitions from stopped to running
+                                        HostStop          - host is being stopped (current spec marks it stopped)
+                                        HostConfigRestart - in-place software restart for a configuration change
+                                        HostRollout       - pod-template change forces a StatefulSet rollout
+                                        HostShutdown      - aggregate: fires whenever the pod is going down for any
+                                                            reason (Stop, ConfigRestart, Rollout, or Delete)
+                                        HostDelete        - host is being removed from the cluster (downsize); fires
+                                                            on the dying host before tear-down. Always emitted
+                                                            alongside HostShutdown.
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "HostCreate"
+                                        - "hostcreate"
+                                        - "HostDelete"
+                                        - "hostdelete"
+                                        - "HostUpdate"
+                                        - "hostupdate"
+                                        - "HostStart"
+                                        - "hoststart"
+                                        - "HostStop"
+                                        - "hoststop"
+                                        - "HostConfigRestart"
+                                        - "hostconfigrestart"
+                                        - "HostRollout"
+                                        - "hostrollout"
+                                        - "HostShutdown"
+                                        - "hostshutdown"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default): error propagates — pre-hook aborts reconcile / host deletion.
+                                      Ignore: error is logged and the reconcile continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
+                            post:
+                              type: array
+                              description: "actions to execute after reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Reconcile lifecycle events that trigger this hook. Required, must be non-empty.
+                                      The hook is skipped on any reconcile whose classifier does not emit at least one
+                                      of the listed events. Supported values:
+                                        Any               - wildcard match: fires on every hook-evaluation point,
+                                                            including the pre-delete sweep on the dying host
+                                        HostCreate        - first reconcile that creates a host (no ancestor); best
+                                                            paired with POST hooks because PRE hooks on first creation
+                                                            are skipped (no live pod yet)
+                                        HostUpdate        - reconcile that has prior state for the host; catch-all
+                                                            for ongoing reconciles
+                                        HostStart         - host transitions from stopped to running
+                                        HostStop          - host is being stopped (current spec marks it stopped)
+                                        HostConfigRestart - in-place software restart for a configuration change
+                                        HostRollout       - pod-template change forces a StatefulSet rollout
+                                        HostShutdown      - aggregate: fires whenever the pod is going down for any
+                                                            reason (Stop, ConfigRestart, Rollout, or Delete)
+                                        HostDelete        - host is being removed from the cluster (downsize); fires
+                                                            on the dying host before tear-down. Always emitted
+                                                            alongside HostShutdown.
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "HostCreate"
+                                        - "hostcreate"
+                                        - "HostDelete"
+                                        - "hostdelete"
+                                        - "HostUpdate"
+                                        - "hostupdate"
+                                        - "HostStart"
+                                        - "hoststart"
+                                        - "HostStop"
+                                        - "hoststop"
+                                        - "HostConfigRestart"
+                                        - "hostconfigrestart"
+                                        - "HostRollout"
+                                        - "hostrollout"
+                                        - "HostShutdown"
+                                        - "hostshutdown"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default): error propagates — pre-hook aborts reconcile / host deletion.
+                                      Ignore: error is logged and the reconcile continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
+                    cluster:
+                      type: object
+                      description: |
+                        CHI-level cluster reconcile defaults inherited by every cluster's
+                        spec.configuration.clusters[N].reconcile section. Use this as a single
+                        place to define cluster-level hooks that should apply to all clusters
+                        in this CHI; per-cluster hooks (under clusters[N].reconcile.hooks)
+                        are appended to (and dedup'd against) the inherited set.
+                      properties:
+                        hooks:
+                          type: object
+                          description: "cluster-level hooks inherited by every cluster"
+                          properties:
+                            pre:
+                              type: array
+                              description: "actions to execute before each cluster reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Cluster-scope reconcile lifecycle events. Required, non-empty.
+                                        Any              - wildcard match: fires on every cluster reconcile pass
+                                                           and the cluster delete sweep
+                                        ClusterCreate    - all hosts in the cluster are new (no ancestor); fires
+                                                           only on the first reconcile of a brand-new cluster
+                                        ClusterReconcile - ongoing reconcile pass over an existing cluster (at
+                                                           least one host has prior state). Fires on every
+                                                           operator reconcile cycle the upstream gates allow,
+                                                           including taskID-only force-reconciles. NOT a "spec
+                                                           changed" signal.
+                                        ClusterDelete    - cluster is being removed (delete sweep — wiring follow-up)
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "ClusterCreate"
+                                        - "clustercreate"
+                                        - "ClusterDelete"
+                                        - "clusterdelete"
+                                        - "ClusterReconcile"
+                                        - "clusterreconcile"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default) propagates the error; Ignore logs a warning and continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
+                            post:
+                              type: array
+                              description: "actions to execute after each cluster reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Cluster-scope reconcile lifecycle events. Required, non-empty.
+                                        Any              - wildcard match: fires on every cluster reconcile pass
+                                                           and the cluster delete sweep
+                                        ClusterCreate    - all hosts in the cluster are new (no ancestor); fires
+                                                           only on the first reconcile of a brand-new cluster
+                                        ClusterReconcile - ongoing reconcile pass over an existing cluster (at
+                                                           least one host has prior state). Fires on every
+                                                           operator reconcile cycle the upstream gates allow,
+                                                           including taskID-only force-reconciles. NOT a "spec
+                                                           changed" signal.
+                                        ClusterDelete    - cluster is being removed (delete sweep — wiring follow-up)
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "ClusterCreate"
+                                        - "clustercreate"
+                                        - "ClusterDelete"
+                                        - "clusterdelete"
+                                        - "ClusterReconcile"
+                                        - "clusterreconcile"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default) propagates the error; Ignore logs a warning and continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
                   description: "Optional, allows tuning reconciling cycle for ClickhouseInstallation from clickhouse-operator side"
                 defaults:
                   type: object
@@ -1961,6 +2767,30 @@ spec:
                               availabilityZone:
                                 type: string
                                 description: "availability zone for Zookeeper node"
+                        keeper:
+                          type: object
+                          description: |
+                            reference to a ClickHouseKeeperInstallation (CHK) resource.
+                            The operator resolves this to ZooKeeper node addresses automatically.
+                          properties:
+                            name:
+                              type: string
+                              description: "name of the ClickHouseKeeperInstallation custom resource"
+                            namespace:
+                              type: string
+                              description: "namespace of the CHK resource, defaults to the CHI namespace if omitted"
+                            serviceType:
+                              type: string
+                              description: |
+                                how to discover keeper endpoints:
+                                  replicas (default) — enumerate per-host services, one ZK node per keeper replica
+                                  service — use the CR-level headless service as a single ZK node entry
+                              enum:
+                                - ""
+                                - "Replicas"
+                                - "replicas"
+                                - "Service"
+                                - "service"
                         session_timeout_ms:
                           type: integer
                           description: "session timeout during connect to Zookeeper"
@@ -2146,6 +2976,30 @@ spec:
                                     availabilityZone:
                                       type: string
                                       description: "availability zone for Zookeeper node"
+                              keeper:
+                                type: object
+                                description: |
+                                  reference to a ClickHouseKeeperInstallation (CHK) resource.
+                                  The operator resolves this to ZooKeeper node addresses automatically.
+                                properties:
+                                  name:
+                                    type: string
+                                    description: "name of the ClickHouseKeeperInstallation custom resource"
+                                  namespace:
+                                    type: string
+                                    description: "namespace of the CHK resource, defaults to the CHI namespace if omitted"
+                                  serviceType:
+                                    type: string
+                                    description: |
+                                      how to discover keeper endpoints:
+                                        replicas (default) — enumerate per-host services, one ZK node per keeper replica
+                                        service — use the CR-level headless service as a single ZK node entry
+                                    enum:
+                                      - ""
+                                      - "Replicas"
+                                      - "replicas"
+                                      - "Service"
+                                      - "service"
                               session_timeout_ms:
                                 type: integer
                                 description: "session timeout during connect to Zookeeper"
@@ -2765,6 +3619,404 @@ spec:
                                               - "enabled"
                                             description: |
                                               Whether the operator during reconcile procedure should drop active replicas when replica is deleted or recreated
+                                  hooks:
+                                    type: object
+                                    description: "hooks to execute before and after host reconcile"
+                                    properties:
+                                      pre:
+                                        type: array
+                                        description: "actions to execute before reconcile"
+                                        nullable: true
+                                        items:
+                                          type: object
+                                          required:
+                                            - events
+                                          properties:
+                                            sql:
+                                              type: object
+                                              properties:
+                                                queries:
+                                                  type: array
+                                                  nullable: true
+                                                  items:
+                                                    type: string
+                                            shell:
+                                              type: object
+                                              properties:
+                                                command:
+                                                  type: array
+                                                  nullable: true
+                                                  items:
+                                                    type: string
+                                                container:
+                                                  type: string
+                                            http:
+                                              type: object
+                                              properties:
+                                                url:
+                                                  type: string
+                                                method:
+                                                  type: string
+                                            target:
+                                              type: string
+                                              description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                              # Both camelCase and all-lowercase forms are accepted; the
+                                              # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                              enum:
+                                                - ""
+                                                - "FirstHost"
+                                                - "firsthost"
+                                                - "AllHosts"
+                                                - "allhosts"
+                                                - "AllShards"
+                                                - "allshards"
+                                            events:
+                                              type: array
+                                              minItems: 1
+                                              description: |
+                                                Reconcile lifecycle events that trigger this hook. Required, must be non-empty.
+                                                The hook is skipped on any reconcile whose classifier does not emit at least one
+                                                of the listed events. Supported values:
+                                                  Any               - wildcard match: fires on every hook-evaluation point,
+                                                                      including the pre-delete sweep on the dying host
+                                                  HostCreate        - first reconcile that creates a host (no ancestor); best
+                                                                      paired with POST hooks because PRE hooks on first creation
+                                                                      are skipped (no live pod yet)
+                                                  HostUpdate        - reconcile that has prior state for the host; catch-all
+                                                                      for ongoing reconciles
+                                                  HostStart         - host transitions from stopped to running
+                                                  HostStop          - host is being stopped (current spec marks it stopped)
+                                                  HostConfigRestart - in-place software restart for a configuration change
+                                                  HostRollout       - pod-template change forces a StatefulSet rollout
+                                                  HostShutdown      - aggregate: fires whenever the pod is going down for any
+                                                                      reason (Stop, ConfigRestart, Rollout, or Delete)
+                                                  HostDelete        - host is being removed from the cluster (downsize); fires
+                                                                      on the dying host before tear-down. Always emitted
+                                                                      alongside HostShutdown.
+                                              items:
+                                                type: string
+                                                # Both PascalCase and all-lowercase forms are accepted; the
+                                                # runtime comparison is case-insensitive (strings.EqualFold).
+                                                enum:
+                                                  - "Any"
+                                                  - "any"
+                                                  - "HostCreate"
+                                                  - "hostcreate"
+                                                  - "HostDelete"
+                                                  - "hostdelete"
+                                                  - "HostUpdate"
+                                                  - "hostupdate"
+                                                  - "HostStart"
+                                                  - "hoststart"
+                                                  - "HostStop"
+                                                  - "hoststop"
+                                                  - "HostConfigRestart"
+                                                  - "hostconfigrestart"
+                                                  - "HostRollout"
+                                                  - "hostrollout"
+                                                  - "HostShutdown"
+                                                  - "hostshutdown"
+                                            failurePolicy:
+                                              type: string
+                                              description: |
+                                                Controls what happens when this hook returns an error.
+                                                Fail (default): error propagates — pre-hook aborts reconcile / host deletion.
+                                                Ignore: error is logged and the reconcile continues.
+                                              # Both PascalCase and all-lowercase forms are accepted; the
+                                              # runtime normalizes via strings.EqualFold (Fail == fail).
+                                              enum:
+                                                - "Fail"
+                                                - "fail"
+                                                - "Ignore"
+                                                - "ignore"
+                                      post:
+                                        type: array
+                                        description: "actions to execute after reconcile"
+                                        nullable: true
+                                        items:
+                                          type: object
+                                          required:
+                                            - events
+                                          properties:
+                                            sql:
+                                              type: object
+                                              properties:
+                                                queries:
+                                                  type: array
+                                                  nullable: true
+                                                  items:
+                                                    type: string
+                                            shell:
+                                              type: object
+                                              properties:
+                                                command:
+                                                  type: array
+                                                  nullable: true
+                                                  items:
+                                                    type: string
+                                                container:
+                                                  type: string
+                                            http:
+                                              type: object
+                                              properties:
+                                                url:
+                                                  type: string
+                                                method:
+                                                  type: string
+                                            target:
+                                              type: string
+                                              description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                              # Both camelCase and all-lowercase forms are accepted; the
+                                              # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                              enum:
+                                                - ""
+                                                - "FirstHost"
+                                                - "firsthost"
+                                                - "AllHosts"
+                                                - "allhosts"
+                                                - "AllShards"
+                                                - "allshards"
+                                            events:
+                                              type: array
+                                              minItems: 1
+                                              description: |
+                                                Reconcile lifecycle events that trigger this hook. Required, must be non-empty.
+                                                The hook is skipped on any reconcile whose classifier does not emit at least one
+                                                of the listed events. Supported values:
+                                                  Any               - wildcard match: fires on every hook-evaluation point,
+                                                                      including the pre-delete sweep on the dying host
+                                                  HostCreate        - first reconcile that creates a host (no ancestor); best
+                                                                      paired with POST hooks because PRE hooks on first creation
+                                                                      are skipped (no live pod yet)
+                                                  HostUpdate        - reconcile that has prior state for the host; catch-all
+                                                                      for ongoing reconciles
+                                                  HostStart         - host transitions from stopped to running
+                                                  HostStop          - host is being stopped (current spec marks it stopped)
+                                                  HostConfigRestart - in-place software restart for a configuration change
+                                                  HostRollout       - pod-template change forces a StatefulSet rollout
+                                                  HostShutdown      - aggregate: fires whenever the pod is going down for any
+                                                                      reason (Stop, ConfigRestart, Rollout, or Delete)
+                                                  HostDelete        - host is being removed from the cluster (downsize); fires
+                                                                      on the dying host before tear-down. Always emitted
+                                                                      alongside HostShutdown.
+                                              items:
+                                                type: string
+                                                # Both PascalCase and all-lowercase forms are accepted; the
+                                                # runtime comparison is case-insensitive (strings.EqualFold).
+                                                enum:
+                                                  - "Any"
+                                                  - "any"
+                                                  - "HostCreate"
+                                                  - "hostcreate"
+                                                  - "HostDelete"
+                                                  - "hostdelete"
+                                                  - "HostUpdate"
+                                                  - "hostupdate"
+                                                  - "HostStart"
+                                                  - "hoststart"
+                                                  - "HostStop"
+                                                  - "hoststop"
+                                                  - "HostConfigRestart"
+                                                  - "hostconfigrestart"
+                                                  - "HostRollout"
+                                                  - "hostrollout"
+                                                  - "HostShutdown"
+                                                  - "hostshutdown"
+                                            failurePolicy:
+                                              type: string
+                                              description: |
+                                                Controls what happens when this hook returns an error.
+                                                Fail (default): error propagates — pre-hook aborts reconcile / host deletion.
+                                                Ignore: error is logged and the reconcile continues.
+                                              # Both PascalCase and all-lowercase forms are accepted; the
+                                              # runtime normalizes via strings.EqualFold (Fail == fail).
+                                              enum:
+                                                - "Fail"
+                                                - "fail"
+                                                - "Ignore"
+                                                - "ignore"
+                              hooks:
+                                # Per-cluster cluster-scope hooks. The schema (TypeClusterHookAction) is
+                                # defined once at spec.reconcile.cluster.hooks above; this block just
+                                # references it. Hooks defined here are merged with any inherited from
+                                # CHI-level spec.reconcile.cluster.hooks via dedup'd MergeFrom.
+                                type: object
+                                description: "cluster-level hooks to execute before and after cluster reconcile"
+                                properties:
+                                  pre:
+                                    type: array
+                                    description: "actions to execute before cluster reconcile"
+                                    nullable: true
+                                    items:
+                                      type: object
+                                      required:
+                                        - events
+                                      properties:
+                                        sql:
+                                          type: object
+                                          properties:
+                                            queries:
+                                              type: array
+                                              nullable: true
+                                              items:
+                                                type: string
+                                        shell:
+                                          type: object
+                                          properties:
+                                            command:
+                                              type: array
+                                              nullable: true
+                                              items:
+                                                type: string
+                                            container:
+                                              type: string
+                                        http:
+                                          type: object
+                                          properties:
+                                            url:
+                                              type: string
+                                            method:
+                                              type: string
+                                        target:
+                                          type: string
+                                          description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                          # Both camelCase and all-lowercase forms are accepted; the
+                                          # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                          enum:
+                                            - ""
+                                            - "FirstHost"
+                                            - "firsthost"
+                                            - "AllHosts"
+                                            - "allhosts"
+                                            - "AllShards"
+                                            - "allshards"
+                                        events:
+                                          type: array
+                                          minItems: 1
+                                          description: |
+                                            Cluster-scope reconcile lifecycle events. Required, non-empty.
+                                              Any              - wildcard match: fires on every cluster reconcile pass
+                                                                 and the cluster delete sweep
+                                              ClusterCreate    - all hosts in the cluster are new (no ancestor); fires
+                                                                 only on the first reconcile of a brand-new cluster
+                                              ClusterReconcile - ongoing reconcile pass over an existing cluster (at
+                                                                 least one host has prior state). Fires on every
+                                                                 operator reconcile cycle the upstream gates allow,
+                                                                 including taskID-only force-reconciles. NOT a "spec
+                                                                 changed" signal.
+                                              ClusterDelete    - cluster is being removed (delete sweep — wiring follow-up)
+                                          items:
+                                            type: string
+                                            # Both PascalCase and all-lowercase forms are accepted; the
+                                            # runtime comparison is case-insensitive (strings.EqualFold).
+                                            enum:
+                                              - "Any"
+                                              - "any"
+                                              - "ClusterCreate"
+                                              - "clustercreate"
+                                              - "ClusterDelete"
+                                              - "clusterdelete"
+                                              - "ClusterReconcile"
+                                              - "clusterreconcile"
+                                        failurePolicy:
+                                          type: string
+                                          description: |
+                                            Controls what happens when this hook returns an error.
+                                            Fail (default) propagates the error; Ignore logs a warning and continues.
+                                          # Both PascalCase and all-lowercase forms are accepted; the
+                                          # runtime normalizes via strings.EqualFold (Fail == fail).
+                                          enum:
+                                            - "Fail"
+                                            - "fail"
+                                            - "Ignore"
+                                            - "ignore"
+                                  post:
+                                    type: array
+                                    description: "actions to execute after cluster reconcile"
+                                    nullable: true
+                                    items:
+                                      type: object
+                                      required:
+                                        - events
+                                      properties:
+                                        sql:
+                                          type: object
+                                          properties:
+                                            queries:
+                                              type: array
+                                              nullable: true
+                                              items:
+                                                type: string
+                                        shell:
+                                          type: object
+                                          properties:
+                                            command:
+                                              type: array
+                                              nullable: true
+                                              items:
+                                                type: string
+                                            container:
+                                              type: string
+                                        http:
+                                          type: object
+                                          properties:
+                                            url:
+                                              type: string
+                                            method:
+                                              type: string
+                                        target:
+                                          type: string
+                                          description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                          # Both camelCase and all-lowercase forms are accepted; the
+                                          # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                          enum:
+                                            - ""
+                                            - "FirstHost"
+                                            - "firsthost"
+                                            - "AllHosts"
+                                            - "allhosts"
+                                            - "AllShards"
+                                            - "allshards"
+                                        events:
+                                          type: array
+                                          minItems: 1
+                                          description: |
+                                            Cluster-scope reconcile lifecycle events. Required, non-empty.
+                                              Any              - wildcard match: fires on every cluster reconcile pass
+                                                                 and the cluster delete sweep
+                                              ClusterCreate    - all hosts in the cluster are new (no ancestor); fires
+                                                                 only on the first reconcile of a brand-new cluster
+                                              ClusterReconcile - ongoing reconcile pass over an existing cluster (at
+                                                                 least one host has prior state). Fires on every
+                                                                 operator reconcile cycle the upstream gates allow,
+                                                                 including taskID-only force-reconciles. NOT a "spec
+                                                                 changed" signal.
+                                              ClusterDelete    - cluster is being removed (delete sweep — wiring follow-up)
+                                          items:
+                                            type: string
+                                            # Both PascalCase and all-lowercase forms are accepted; the
+                                            # runtime comparison is case-insensitive (strings.EqualFold).
+                                            enum:
+                                              - "Any"
+                                              - "any"
+                                              - "ClusterCreate"
+                                              - "clustercreate"
+                                              - "ClusterDelete"
+                                              - "clusterdelete"
+                                              - "ClusterReconcile"
+                                              - "clusterreconcile"
+                                        failurePolicy:
+                                          type: string
+                                          description: |
+                                            Controls what happens when this hook returns an error.
+                                            Fail (default) propagates the error; Ignore logs a warning and continues.
+                                          # Both PascalCase and all-lowercase forms are accepted; the
+                                          # runtime normalizes via strings.EqualFold (Fail == fail).
+                                          enum:
+                                            - "Fail"
+                                            - "fail"
+                                            - "Ignore"
+                                            - "ignore"
                           layout:
                             type: object
                             description: |
@@ -3704,14 +4956,14 @@ spec:
 # SINGULAR=clickhouseinstallationtemplate
 # PLURAL=clickhouseinstallationtemplates
 # SHORT=chit
-# OPERATOR_VERSION=0.26.3
+# OPERATOR_VERSION=0.27.0
 #
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: clickhouseinstallationtemplates.clickhouse.altinity.com
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
 spec:
   group: clickhouse.altinity.com
   scope: Namespaced
@@ -4804,6 +6056,409 @@ spec:
                                     - "enabled"
                                   description: |
                                     Whether the operator during reconcile procedure should drop active replicas when replica is deleted or recreated
+                        hooks:
+                          type: object
+                          description: "hooks to execute before and after host reconcile"
+                          properties:
+                            pre:
+                              type: array
+                              description: "actions to execute before reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Reconcile lifecycle events that trigger this hook. Required, must be non-empty.
+                                      The hook is skipped on any reconcile whose classifier does not emit at least one
+                                      of the listed events. Supported values:
+                                        Any               - wildcard match: fires on every hook-evaluation point,
+                                                            including the pre-delete sweep on the dying host
+                                        HostCreate        - first reconcile that creates a host (no ancestor); best
+                                                            paired with POST hooks because PRE hooks on first creation
+                                                            are skipped (no live pod yet)
+                                        HostUpdate        - reconcile that has prior state for the host; catch-all
+                                                            for ongoing reconciles
+                                        HostStart         - host transitions from stopped to running
+                                        HostStop          - host is being stopped (current spec marks it stopped)
+                                        HostConfigRestart - in-place software restart for a configuration change
+                                        HostRollout       - pod-template change forces a StatefulSet rollout
+                                        HostShutdown      - aggregate: fires whenever the pod is going down for any
+                                                            reason (Stop, ConfigRestart, Rollout, or Delete)
+                                        HostDelete        - host is being removed from the cluster (downsize); fires
+                                                            on the dying host before tear-down. Always emitted
+                                                            alongside HostShutdown.
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "HostCreate"
+                                        - "hostcreate"
+                                        - "HostDelete"
+                                        - "hostdelete"
+                                        - "HostUpdate"
+                                        - "hostupdate"
+                                        - "HostStart"
+                                        - "hoststart"
+                                        - "HostStop"
+                                        - "hoststop"
+                                        - "HostConfigRestart"
+                                        - "hostconfigrestart"
+                                        - "HostRollout"
+                                        - "hostrollout"
+                                        - "HostShutdown"
+                                        - "hostshutdown"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default): error propagates — pre-hook aborts reconcile / host deletion.
+                                      Ignore: error is logged and the reconcile continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
+                            post:
+                              type: array
+                              description: "actions to execute after reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Reconcile lifecycle events that trigger this hook. Required, must be non-empty.
+                                      The hook is skipped on any reconcile whose classifier does not emit at least one
+                                      of the listed events. Supported values:
+                                        Any               - wildcard match: fires on every hook-evaluation point,
+                                                            including the pre-delete sweep on the dying host
+                                        HostCreate        - first reconcile that creates a host (no ancestor); best
+                                                            paired with POST hooks because PRE hooks on first creation
+                                                            are skipped (no live pod yet)
+                                        HostUpdate        - reconcile that has prior state for the host; catch-all
+                                                            for ongoing reconciles
+                                        HostStart         - host transitions from stopped to running
+                                        HostStop          - host is being stopped (current spec marks it stopped)
+                                        HostConfigRestart - in-place software restart for a configuration change
+                                        HostRollout       - pod-template change forces a StatefulSet rollout
+                                        HostShutdown      - aggregate: fires whenever the pod is going down for any
+                                                            reason (Stop, ConfigRestart, Rollout, or Delete)
+                                        HostDelete        - host is being removed from the cluster (downsize); fires
+                                                            on the dying host before tear-down. Always emitted
+                                                            alongside HostShutdown.
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "HostCreate"
+                                        - "hostcreate"
+                                        - "HostDelete"
+                                        - "hostdelete"
+                                        - "HostUpdate"
+                                        - "hostupdate"
+                                        - "HostStart"
+                                        - "hoststart"
+                                        - "HostStop"
+                                        - "hoststop"
+                                        - "HostConfigRestart"
+                                        - "hostconfigrestart"
+                                        - "HostRollout"
+                                        - "hostrollout"
+                                        - "HostShutdown"
+                                        - "hostshutdown"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default): error propagates — pre-hook aborts reconcile / host deletion.
+                                      Ignore: error is logged and the reconcile continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
+                    cluster:
+                      type: object
+                      description: |
+                        CHI-level cluster reconcile defaults inherited by every cluster's
+                        spec.configuration.clusters[N].reconcile section. Use this as a single
+                        place to define cluster-level hooks that should apply to all clusters
+                        in this CHI; per-cluster hooks (under clusters[N].reconcile.hooks)
+                        are appended to (and dedup'd against) the inherited set.
+                      properties:
+                        hooks:
+                          type: object
+                          description: "cluster-level hooks inherited by every cluster"
+                          properties:
+                            pre:
+                              type: array
+                              description: "actions to execute before each cluster reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Cluster-scope reconcile lifecycle events. Required, non-empty.
+                                        Any              - wildcard match: fires on every cluster reconcile pass
+                                                           and the cluster delete sweep
+                                        ClusterCreate    - all hosts in the cluster are new (no ancestor); fires
+                                                           only on the first reconcile of a brand-new cluster
+                                        ClusterReconcile - ongoing reconcile pass over an existing cluster (at
+                                                           least one host has prior state). Fires on every
+                                                           operator reconcile cycle the upstream gates allow,
+                                                           including taskID-only force-reconciles. NOT a "spec
+                                                           changed" signal.
+                                        ClusterDelete    - cluster is being removed (delete sweep — wiring follow-up)
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "ClusterCreate"
+                                        - "clustercreate"
+                                        - "ClusterDelete"
+                                        - "clusterdelete"
+                                        - "ClusterReconcile"
+                                        - "clusterreconcile"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default) propagates the error; Ignore logs a warning and continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
+                            post:
+                              type: array
+                              description: "actions to execute after each cluster reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Cluster-scope reconcile lifecycle events. Required, non-empty.
+                                        Any              - wildcard match: fires on every cluster reconcile pass
+                                                           and the cluster delete sweep
+                                        ClusterCreate    - all hosts in the cluster are new (no ancestor); fires
+                                                           only on the first reconcile of a brand-new cluster
+                                        ClusterReconcile - ongoing reconcile pass over an existing cluster (at
+                                                           least one host has prior state). Fires on every
+                                                           operator reconcile cycle the upstream gates allow,
+                                                           including taskID-only force-reconciles. NOT a "spec
+                                                           changed" signal.
+                                        ClusterDelete    - cluster is being removed (delete sweep — wiring follow-up)
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "ClusterCreate"
+                                        - "clustercreate"
+                                        - "ClusterDelete"
+                                        - "clusterdelete"
+                                        - "ClusterReconcile"
+                                        - "clusterreconcile"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default) propagates the error; Ignore logs a warning and continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
                 reconcile:
                   type: object
                   # nullable: true
@@ -5492,6 +7147,409 @@ spec:
                                     - "enabled"
                                   description: |
                                     Whether the operator during reconcile procedure should drop active replicas when replica is deleted or recreated
+                        hooks:
+                          type: object
+                          description: "hooks to execute before and after host reconcile"
+                          properties:
+                            pre:
+                              type: array
+                              description: "actions to execute before reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Reconcile lifecycle events that trigger this hook. Required, must be non-empty.
+                                      The hook is skipped on any reconcile whose classifier does not emit at least one
+                                      of the listed events. Supported values:
+                                        Any               - wildcard match: fires on every hook-evaluation point,
+                                                            including the pre-delete sweep on the dying host
+                                        HostCreate        - first reconcile that creates a host (no ancestor); best
+                                                            paired with POST hooks because PRE hooks on first creation
+                                                            are skipped (no live pod yet)
+                                        HostUpdate        - reconcile that has prior state for the host; catch-all
+                                                            for ongoing reconciles
+                                        HostStart         - host transitions from stopped to running
+                                        HostStop          - host is being stopped (current spec marks it stopped)
+                                        HostConfigRestart - in-place software restart for a configuration change
+                                        HostRollout       - pod-template change forces a StatefulSet rollout
+                                        HostShutdown      - aggregate: fires whenever the pod is going down for any
+                                                            reason (Stop, ConfigRestart, Rollout, or Delete)
+                                        HostDelete        - host is being removed from the cluster (downsize); fires
+                                                            on the dying host before tear-down. Always emitted
+                                                            alongside HostShutdown.
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "HostCreate"
+                                        - "hostcreate"
+                                        - "HostDelete"
+                                        - "hostdelete"
+                                        - "HostUpdate"
+                                        - "hostupdate"
+                                        - "HostStart"
+                                        - "hoststart"
+                                        - "HostStop"
+                                        - "hoststop"
+                                        - "HostConfigRestart"
+                                        - "hostconfigrestart"
+                                        - "HostRollout"
+                                        - "hostrollout"
+                                        - "HostShutdown"
+                                        - "hostshutdown"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default): error propagates — pre-hook aborts reconcile / host deletion.
+                                      Ignore: error is logged and the reconcile continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
+                            post:
+                              type: array
+                              description: "actions to execute after reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Reconcile lifecycle events that trigger this hook. Required, must be non-empty.
+                                      The hook is skipped on any reconcile whose classifier does not emit at least one
+                                      of the listed events. Supported values:
+                                        Any               - wildcard match: fires on every hook-evaluation point,
+                                                            including the pre-delete sweep on the dying host
+                                        HostCreate        - first reconcile that creates a host (no ancestor); best
+                                                            paired with POST hooks because PRE hooks on first creation
+                                                            are skipped (no live pod yet)
+                                        HostUpdate        - reconcile that has prior state for the host; catch-all
+                                                            for ongoing reconciles
+                                        HostStart         - host transitions from stopped to running
+                                        HostStop          - host is being stopped (current spec marks it stopped)
+                                        HostConfigRestart - in-place software restart for a configuration change
+                                        HostRollout       - pod-template change forces a StatefulSet rollout
+                                        HostShutdown      - aggregate: fires whenever the pod is going down for any
+                                                            reason (Stop, ConfigRestart, Rollout, or Delete)
+                                        HostDelete        - host is being removed from the cluster (downsize); fires
+                                                            on the dying host before tear-down. Always emitted
+                                                            alongside HostShutdown.
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "HostCreate"
+                                        - "hostcreate"
+                                        - "HostDelete"
+                                        - "hostdelete"
+                                        - "HostUpdate"
+                                        - "hostupdate"
+                                        - "HostStart"
+                                        - "hoststart"
+                                        - "HostStop"
+                                        - "hoststop"
+                                        - "HostConfigRestart"
+                                        - "hostconfigrestart"
+                                        - "HostRollout"
+                                        - "hostrollout"
+                                        - "HostShutdown"
+                                        - "hostshutdown"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default): error propagates — pre-hook aborts reconcile / host deletion.
+                                      Ignore: error is logged and the reconcile continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
+                    cluster:
+                      type: object
+                      description: |
+                        CHI-level cluster reconcile defaults inherited by every cluster's
+                        spec.configuration.clusters[N].reconcile section. Use this as a single
+                        place to define cluster-level hooks that should apply to all clusters
+                        in this CHI; per-cluster hooks (under clusters[N].reconcile.hooks)
+                        are appended to (and dedup'd against) the inherited set.
+                      properties:
+                        hooks:
+                          type: object
+                          description: "cluster-level hooks inherited by every cluster"
+                          properties:
+                            pre:
+                              type: array
+                              description: "actions to execute before each cluster reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Cluster-scope reconcile lifecycle events. Required, non-empty.
+                                        Any              - wildcard match: fires on every cluster reconcile pass
+                                                           and the cluster delete sweep
+                                        ClusterCreate    - all hosts in the cluster are new (no ancestor); fires
+                                                           only on the first reconcile of a brand-new cluster
+                                        ClusterReconcile - ongoing reconcile pass over an existing cluster (at
+                                                           least one host has prior state). Fires on every
+                                                           operator reconcile cycle the upstream gates allow,
+                                                           including taskID-only force-reconciles. NOT a "spec
+                                                           changed" signal.
+                                        ClusterDelete    - cluster is being removed (delete sweep — wiring follow-up)
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "ClusterCreate"
+                                        - "clustercreate"
+                                        - "ClusterDelete"
+                                        - "clusterdelete"
+                                        - "ClusterReconcile"
+                                        - "clusterreconcile"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default) propagates the error; Ignore logs a warning and continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
+                            post:
+                              type: array
+                              description: "actions to execute after each cluster reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                required:
+                                  - events
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                    # Both camelCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                                  events:
+                                    type: array
+                                    minItems: 1
+                                    description: |
+                                      Cluster-scope reconcile lifecycle events. Required, non-empty.
+                                        Any              - wildcard match: fires on every cluster reconcile pass
+                                                           and the cluster delete sweep
+                                        ClusterCreate    - all hosts in the cluster are new (no ancestor); fires
+                                                           only on the first reconcile of a brand-new cluster
+                                        ClusterReconcile - ongoing reconcile pass over an existing cluster (at
+                                                           least one host has prior state). Fires on every
+                                                           operator reconcile cycle the upstream gates allow,
+                                                           including taskID-only force-reconciles. NOT a "spec
+                                                           changed" signal.
+                                        ClusterDelete    - cluster is being removed (delete sweep — wiring follow-up)
+                                    items:
+                                      type: string
+                                      # Both PascalCase and all-lowercase forms are accepted; the
+                                      # runtime comparison is case-insensitive (strings.EqualFold).
+                                      enum:
+                                        - "Any"
+                                        - "any"
+                                        - "ClusterCreate"
+                                        - "clustercreate"
+                                        - "ClusterDelete"
+                                        - "clusterdelete"
+                                        - "ClusterReconcile"
+                                        - "clusterreconcile"
+                                  failurePolicy:
+                                    type: string
+                                    description: |
+                                      Controls what happens when this hook returns an error.
+                                      Fail (default) propagates the error; Ignore logs a warning and continues.
+                                    # Both PascalCase and all-lowercase forms are accepted; the
+                                    # runtime normalizes via strings.EqualFold (Fail == fail).
+                                    enum:
+                                      - "Fail"
+                                      - "fail"
+                                      - "Ignore"
+                                      - "ignore"
                   description: "Optional, allows tuning reconciling cycle for ClickhouseInstallation from clickhouse-operator side"
                 defaults:
                   type: object
@@ -5661,6 +7719,30 @@ spec:
                               availabilityZone:
                                 type: string
                                 description: "availability zone for Zookeeper node"
+                        keeper:
+                          type: object
+                          description: |
+                            reference to a ClickHouseKeeperInstallation (CHK) resource.
+                            The operator resolves this to ZooKeeper node addresses automatically.
+                          properties:
+                            name:
+                              type: string
+                              description: "name of the ClickHouseKeeperInstallation custom resource"
+                            namespace:
+                              type: string
+                              description: "namespace of the CHK resource, defaults to the CHI namespace if omitted"
+                            serviceType:
+                              type: string
+                              description: |
+                                how to discover keeper endpoints:
+                                  replicas (default) — enumerate per-host services, one ZK node per keeper replica
+                                  service — use the CR-level headless service as a single ZK node entry
+                              enum:
+                                - ""
+                                - "Replicas"
+                                - "replicas"
+                                - "Service"
+                                - "service"
                         session_timeout_ms:
                           type: integer
                           description: "session timeout during connect to Zookeeper"
@@ -5846,6 +7928,30 @@ spec:
                                     availabilityZone:
                                       type: string
                                       description: "availability zone for Zookeeper node"
+                              keeper:
+                                type: object
+                                description: |
+                                  reference to a ClickHouseKeeperInstallation (CHK) resource.
+                                  The operator resolves this to ZooKeeper node addresses automatically.
+                                properties:
+                                  name:
+                                    type: string
+                                    description: "name of the ClickHouseKeeperInstallation custom resource"
+                                  namespace:
+                                    type: string
+                                    description: "namespace of the CHK resource, defaults to the CHI namespace if omitted"
+                                  serviceType:
+                                    type: string
+                                    description: |
+                                      how to discover keeper endpoints:
+                                        replicas (default) — enumerate per-host services, one ZK node per keeper replica
+                                        service — use the CR-level headless service as a single ZK node entry
+                                    enum:
+                                      - ""
+                                      - "Replicas"
+                                      - "replicas"
+                                      - "Service"
+                                      - "service"
                               session_timeout_ms:
                                 type: integer
                                 description: "session timeout during connect to Zookeeper"
@@ -6465,6 +8571,404 @@ spec:
                                               - "enabled"
                                             description: |
                                               Whether the operator during reconcile procedure should drop active replicas when replica is deleted or recreated
+                                  hooks:
+                                    type: object
+                                    description: "hooks to execute before and after host reconcile"
+                                    properties:
+                                      pre:
+                                        type: array
+                                        description: "actions to execute before reconcile"
+                                        nullable: true
+                                        items:
+                                          type: object
+                                          required:
+                                            - events
+                                          properties:
+                                            sql:
+                                              type: object
+                                              properties:
+                                                queries:
+                                                  type: array
+                                                  nullable: true
+                                                  items:
+                                                    type: string
+                                            shell:
+                                              type: object
+                                              properties:
+                                                command:
+                                                  type: array
+                                                  nullable: true
+                                                  items:
+                                                    type: string
+                                                container:
+                                                  type: string
+                                            http:
+                                              type: object
+                                              properties:
+                                                url:
+                                                  type: string
+                                                method:
+                                                  type: string
+                                            target:
+                                              type: string
+                                              description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                              # Both camelCase and all-lowercase forms are accepted; the
+                                              # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                              enum:
+                                                - ""
+                                                - "FirstHost"
+                                                - "firsthost"
+                                                - "AllHosts"
+                                                - "allhosts"
+                                                - "AllShards"
+                                                - "allshards"
+                                            events:
+                                              type: array
+                                              minItems: 1
+                                              description: |
+                                                Reconcile lifecycle events that trigger this hook. Required, must be non-empty.
+                                                The hook is skipped on any reconcile whose classifier does not emit at least one
+                                                of the listed events. Supported values:
+                                                  Any               - wildcard match: fires on every hook-evaluation point,
+                                                                      including the pre-delete sweep on the dying host
+                                                  HostCreate        - first reconcile that creates a host (no ancestor); best
+                                                                      paired with POST hooks because PRE hooks on first creation
+                                                                      are skipped (no live pod yet)
+                                                  HostUpdate        - reconcile that has prior state for the host; catch-all
+                                                                      for ongoing reconciles
+                                                  HostStart         - host transitions from stopped to running
+                                                  HostStop          - host is being stopped (current spec marks it stopped)
+                                                  HostConfigRestart - in-place software restart for a configuration change
+                                                  HostRollout       - pod-template change forces a StatefulSet rollout
+                                                  HostShutdown      - aggregate: fires whenever the pod is going down for any
+                                                                      reason (Stop, ConfigRestart, Rollout, or Delete)
+                                                  HostDelete        - host is being removed from the cluster (downsize); fires
+                                                                      on the dying host before tear-down. Always emitted
+                                                                      alongside HostShutdown.
+                                              items:
+                                                type: string
+                                                # Both PascalCase and all-lowercase forms are accepted; the
+                                                # runtime comparison is case-insensitive (strings.EqualFold).
+                                                enum:
+                                                  - "Any"
+                                                  - "any"
+                                                  - "HostCreate"
+                                                  - "hostcreate"
+                                                  - "HostDelete"
+                                                  - "hostdelete"
+                                                  - "HostUpdate"
+                                                  - "hostupdate"
+                                                  - "HostStart"
+                                                  - "hoststart"
+                                                  - "HostStop"
+                                                  - "hoststop"
+                                                  - "HostConfigRestart"
+                                                  - "hostconfigrestart"
+                                                  - "HostRollout"
+                                                  - "hostrollout"
+                                                  - "HostShutdown"
+                                                  - "hostshutdown"
+                                            failurePolicy:
+                                              type: string
+                                              description: |
+                                                Controls what happens when this hook returns an error.
+                                                Fail (default): error propagates — pre-hook aborts reconcile / host deletion.
+                                                Ignore: error is logged and the reconcile continues.
+                                              # Both PascalCase and all-lowercase forms are accepted; the
+                                              # runtime normalizes via strings.EqualFold (Fail == fail).
+                                              enum:
+                                                - "Fail"
+                                                - "fail"
+                                                - "Ignore"
+                                                - "ignore"
+                                      post:
+                                        type: array
+                                        description: "actions to execute after reconcile"
+                                        nullable: true
+                                        items:
+                                          type: object
+                                          required:
+                                            - events
+                                          properties:
+                                            sql:
+                                              type: object
+                                              properties:
+                                                queries:
+                                                  type: array
+                                                  nullable: true
+                                                  items:
+                                                    type: string
+                                            shell:
+                                              type: object
+                                              properties:
+                                                command:
+                                                  type: array
+                                                  nullable: true
+                                                  items:
+                                                    type: string
+                                                container:
+                                                  type: string
+                                            http:
+                                              type: object
+                                              properties:
+                                                url:
+                                                  type: string
+                                                method:
+                                                  type: string
+                                            target:
+                                              type: string
+                                              description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                              # Both camelCase and all-lowercase forms are accepted; the
+                                              # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                              enum:
+                                                - ""
+                                                - "FirstHost"
+                                                - "firsthost"
+                                                - "AllHosts"
+                                                - "allhosts"
+                                                - "AllShards"
+                                                - "allshards"
+                                            events:
+                                              type: array
+                                              minItems: 1
+                                              description: |
+                                                Reconcile lifecycle events that trigger this hook. Required, must be non-empty.
+                                                The hook is skipped on any reconcile whose classifier does not emit at least one
+                                                of the listed events. Supported values:
+                                                  Any               - wildcard match: fires on every hook-evaluation point,
+                                                                      including the pre-delete sweep on the dying host
+                                                  HostCreate        - first reconcile that creates a host (no ancestor); best
+                                                                      paired with POST hooks because PRE hooks on first creation
+                                                                      are skipped (no live pod yet)
+                                                  HostUpdate        - reconcile that has prior state for the host; catch-all
+                                                                      for ongoing reconciles
+                                                  HostStart         - host transitions from stopped to running
+                                                  HostStop          - host is being stopped (current spec marks it stopped)
+                                                  HostConfigRestart - in-place software restart for a configuration change
+                                                  HostRollout       - pod-template change forces a StatefulSet rollout
+                                                  HostShutdown      - aggregate: fires whenever the pod is going down for any
+                                                                      reason (Stop, ConfigRestart, Rollout, or Delete)
+                                                  HostDelete        - host is being removed from the cluster (downsize); fires
+                                                                      on the dying host before tear-down. Always emitted
+                                                                      alongside HostShutdown.
+                                              items:
+                                                type: string
+                                                # Both PascalCase and all-lowercase forms are accepted; the
+                                                # runtime comparison is case-insensitive (strings.EqualFold).
+                                                enum:
+                                                  - "Any"
+                                                  - "any"
+                                                  - "HostCreate"
+                                                  - "hostcreate"
+                                                  - "HostDelete"
+                                                  - "hostdelete"
+                                                  - "HostUpdate"
+                                                  - "hostupdate"
+                                                  - "HostStart"
+                                                  - "hoststart"
+                                                  - "HostStop"
+                                                  - "hoststop"
+                                                  - "HostConfigRestart"
+                                                  - "hostconfigrestart"
+                                                  - "HostRollout"
+                                                  - "hostrollout"
+                                                  - "HostShutdown"
+                                                  - "hostshutdown"
+                                            failurePolicy:
+                                              type: string
+                                              description: |
+                                                Controls what happens when this hook returns an error.
+                                                Fail (default): error propagates — pre-hook aborts reconcile / host deletion.
+                                                Ignore: error is logged and the reconcile continues.
+                                              # Both PascalCase and all-lowercase forms are accepted; the
+                                              # runtime normalizes via strings.EqualFold (Fail == fail).
+                                              enum:
+                                                - "Fail"
+                                                - "fail"
+                                                - "Ignore"
+                                                - "ignore"
+                              hooks:
+                                # Per-cluster cluster-scope hooks. The schema (TypeClusterHookAction) is
+                                # defined once at spec.reconcile.cluster.hooks above; this block just
+                                # references it. Hooks defined here are merged with any inherited from
+                                # CHI-level spec.reconcile.cluster.hooks via dedup'd MergeFrom.
+                                type: object
+                                description: "cluster-level hooks to execute before and after cluster reconcile"
+                                properties:
+                                  pre:
+                                    type: array
+                                    description: "actions to execute before cluster reconcile"
+                                    nullable: true
+                                    items:
+                                      type: object
+                                      required:
+                                        - events
+                                      properties:
+                                        sql:
+                                          type: object
+                                          properties:
+                                            queries:
+                                              type: array
+                                              nullable: true
+                                              items:
+                                                type: string
+                                        shell:
+                                          type: object
+                                          properties:
+                                            command:
+                                              type: array
+                                              nullable: true
+                                              items:
+                                                type: string
+                                            container:
+                                              type: string
+                                        http:
+                                          type: object
+                                          properties:
+                                            url:
+                                              type: string
+                                            method:
+                                              type: string
+                                        target:
+                                          type: string
+                                          description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                          # Both camelCase and all-lowercase forms are accepted; the
+                                          # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                          enum:
+                                            - ""
+                                            - "FirstHost"
+                                            - "firsthost"
+                                            - "AllHosts"
+                                            - "allhosts"
+                                            - "AllShards"
+                                            - "allshards"
+                                        events:
+                                          type: array
+                                          minItems: 1
+                                          description: |
+                                            Cluster-scope reconcile lifecycle events. Required, non-empty.
+                                              Any              - wildcard match: fires on every cluster reconcile pass
+                                                                 and the cluster delete sweep
+                                              ClusterCreate    - all hosts in the cluster are new (no ancestor); fires
+                                                                 only on the first reconcile of a brand-new cluster
+                                              ClusterReconcile - ongoing reconcile pass over an existing cluster (at
+                                                                 least one host has prior state). Fires on every
+                                                                 operator reconcile cycle the upstream gates allow,
+                                                                 including taskID-only force-reconciles. NOT a "spec
+                                                                 changed" signal.
+                                              ClusterDelete    - cluster is being removed (delete sweep — wiring follow-up)
+                                          items:
+                                            type: string
+                                            # Both PascalCase and all-lowercase forms are accepted; the
+                                            # runtime comparison is case-insensitive (strings.EqualFold).
+                                            enum:
+                                              - "Any"
+                                              - "any"
+                                              - "ClusterCreate"
+                                              - "clustercreate"
+                                              - "ClusterDelete"
+                                              - "clusterdelete"
+                                              - "ClusterReconcile"
+                                              - "clusterreconcile"
+                                        failurePolicy:
+                                          type: string
+                                          description: |
+                                            Controls what happens when this hook returns an error.
+                                            Fail (default) propagates the error; Ignore logs a warning and continues.
+                                          # Both PascalCase and all-lowercase forms are accepted; the
+                                          # runtime normalizes via strings.EqualFold (Fail == fail).
+                                          enum:
+                                            - "Fail"
+                                            - "fail"
+                                            - "Ignore"
+                                            - "ignore"
+                                  post:
+                                    type: array
+                                    description: "actions to execute after cluster reconcile"
+                                    nullable: true
+                                    items:
+                                      type: object
+                                      required:
+                                        - events
+                                      properties:
+                                        sql:
+                                          type: object
+                                          properties:
+                                            queries:
+                                              type: array
+                                              nullable: true
+                                              items:
+                                                type: string
+                                        shell:
+                                          type: object
+                                          properties:
+                                            command:
+                                              type: array
+                                              nullable: true
+                                              items:
+                                                type: string
+                                            container:
+                                              type: string
+                                        http:
+                                          type: object
+                                          properties:
+                                            url:
+                                              type: string
+                                            method:
+                                              type: string
+                                        target:
+                                          type: string
+                                          description: "where to execute hook for cluster-level hooks: FirstHost (default), AllHosts, AllShards"
+                                          # Both camelCase and all-lowercase forms are accepted; the
+                                          # runtime normalizes via strings.EqualFold (firstHost == firsthost).
+                                          enum:
+                                            - ""
+                                            - "FirstHost"
+                                            - "firsthost"
+                                            - "AllHosts"
+                                            - "allhosts"
+                                            - "AllShards"
+                                            - "allshards"
+                                        events:
+                                          type: array
+                                          minItems: 1
+                                          description: |
+                                            Cluster-scope reconcile lifecycle events. Required, non-empty.
+                                              Any              - wildcard match: fires on every cluster reconcile pass
+                                                                 and the cluster delete sweep
+                                              ClusterCreate    - all hosts in the cluster are new (no ancestor); fires
+                                                                 only on the first reconcile of a brand-new cluster
+                                              ClusterReconcile - ongoing reconcile pass over an existing cluster (at
+                                                                 least one host has prior state). Fires on every
+                                                                 operator reconcile cycle the upstream gates allow,
+                                                                 including taskID-only force-reconciles. NOT a "spec
+                                                                 changed" signal.
+                                              ClusterDelete    - cluster is being removed (delete sweep — wiring follow-up)
+                                          items:
+                                            type: string
+                                            # Both PascalCase and all-lowercase forms are accepted; the
+                                            # runtime comparison is case-insensitive (strings.EqualFold).
+                                            enum:
+                                              - "Any"
+                                              - "any"
+                                              - "ClusterCreate"
+                                              - "clustercreate"
+                                              - "ClusterDelete"
+                                              - "clusterdelete"
+                                              - "ClusterReconcile"
+                                              - "clusterreconcile"
+                                        failurePolicy:
+                                          type: string
+                                          description: |
+                                            Controls what happens when this hook returns an error.
+                                            Fail (default) propagates the error; Ignore logs a warning and continues.
+                                          # Both PascalCase and all-lowercase forms are accepted; the
+                                          # runtime normalizes via strings.EqualFold (Fail == fail).
+                                          enum:
+                                            - "Fail"
+                                            - "fail"
+                                            - "Ignore"
+                                            - "ignore"
                           layout:
                             type: object
                             description: |
@@ -7407,7 +9911,7 @@ kind: CustomResourceDefinition
 metadata:
   name: clickhouseoperatorconfigurations.clickhouse.altinity.com
   labels:
-    clickhouse.altinity.com/chop: 0.26.3
+    clickhouse.altinity.com/chop: 0.27.0
 spec:
   group: clickhouse.altinity.com
   scope: Namespaced
@@ -7456,6 +9960,20 @@ spec:
                       type: object
                       description: "List of namespaces where clickhouse-operator watches for events."
                       x-kubernetes-preserve-unknown-fields: true
+                    configuration:
+                      type: object
+                      description: "Behavior when ClickHouseOperatorConfiguration resources change"
+                      properties:
+                        onChange:
+                          type: string
+                          enum:
+                            - none
+                            - None
+                            - ignore
+                            - Ignore
+                            - restart
+                            - Restart
+                          description: "none/ignore — do nothing; restart — exit process so the operator pod restarts"
                 clickhouse:
                   type: object
                   description: "Clickhouse related parameters used by clickhouse-operator"
@@ -7646,6 +10164,13 @@ spec:
                             Regexp to match tables in system database to fetch metrics from.
                             Multiple tables can be matched using regexp. Matched tables are merged using merge() table function.
                             Default is "^(metrics|custom_metrics)$".
+                        excludeRegexp:
+                          type: array
+                          items:
+                            type: string
+                          description: |
+                            List of regexps to match ClickHouse metrics to exclude from export.
+                            Regexps match internal metric names before Prometheus normalization and prefixing.
                 template:
                   type: object
                   description: "Parameters which are used if you want to generate ClickHouseInstallationTemplate custom resources from files which are stored inside clickhouse-operator deployment"
@@ -8062,6 +10587,146 @@ spec:
                                     - "enabled"
                                   description: |
                                     Whether the operator during reconcile procedure should drop active replicas when replica is deleted or recreated
+                        hooks:
+                          type: object
+                          description: "default host-level hooks to execute before and after host reconcile"
+                          properties:
+                            pre:
+                              type: array
+                              description: "actions to execute before host reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook: FirstHost (default), AllHosts, AllShards"
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                            post:
+                              type: array
+                              description: "actions to execute after host reconcile"
+                              nullable: true
+                              items:
+                                type: object
+                                properties:
+                                  sql:
+                                    type: object
+                                    properties:
+                                      queries:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                  shell:
+                                    type: object
+                                    properties:
+                                      command:
+                                        type: array
+                                        nullable: true
+                                        items:
+                                          type: string
+                                      container:
+                                        type: string
+                                  http:
+                                    type: object
+                                    properties:
+                                      url:
+                                        type: string
+                                      method:
+                                        type: string
+                                  target:
+                                    type: string
+                                    description: "where to execute hook: FirstHost (default), AllHosts, AllShards"
+                                    enum:
+                                      - ""
+                                      - "FirstHost"
+                                      - "firsthost"
+                                      - "AllHosts"
+                                      - "allhosts"
+                                      - "AllShards"
+                                      - "allshards"
+                    coordination:
+                      type: object
+                      description: "Coordination with external systems during reconcile"
+                      properties:
+                        keeper:
+                          type: object
+                          description: "Keeper-related coordination settings"
+                          properties:
+                            readyTimeout:
+                              type: integer
+                              minimum: 1
+                              description: |
+                                How long the operator waits for a referenced ClickHouseKeeper to become ready
+                                before aborting CHI reconcile. In seconds. Default is 120.
+                            onKeeperResourceUpdate:
+                              type: string
+                              description: |
+                                Reaction when a referenced CHK resource changes.
+                                  none (default) — do nothing
+                                  reconcile — trigger CHI reconcile
+                              enum:
+                                - ""
+                                - "None"
+                                - "none"
+                                - "Reconcile"
+                                - "reconcile"
+                    recovery:
+                      type: object
+                      description: "Auto-recovery from reconcile failures, scoped by CHI state"
+                      properties:
+                        from:
+                          type: object
+                          description: "Recovery scopes keyed by CHI state being recovered from"
+                          properties:
+                            aborted:
+                              type: object
+                              description: "Recovery from Status=Aborted"
+                              properties:
+                                onPodReady:
+                                  type: string
+                                  description: |
+                                    Reaction when a pod belonging to an Aborted CHI transitions to Ready.
+                                      retry (default) — re-enqueue the CHI for reconcile
+                                      none — do nothing, CHI stays Aborted
+                                  enum:
+                                    - ""
+                                    - "None"
+                                    - "none"
+                                    - "Retry"
+                                    - "retry"
                 annotation:
                   type: object
                   description: "defines which metadata.annotations items will include or exclude during render StatefulSet, Pod, PVC resources"
@@ -8314,14 +10979,14 @@ spec:
 ---
 # Template Parameters:
 #
-# OPERATOR_VERSION=0.26.3
+# OPERATOR_VERSION=0.27.0
 #
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: clickhousekeeperinstallations.clickhouse-keeper.altinity.com
   labels:
-    clickhouse-keeper.altinity.com/chop: 0.26.3
+    clickhouse-keeper.altinity.com/chop: 0.27.0
 spec:
   group: clickhouse-keeper.altinity.com
   scope: Namespaced

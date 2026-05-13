@@ -56,12 +56,17 @@ func initClickHouse(ctx context.Context) {
 	}
 
 	// Initialize k8s API clients
-	kubeClient, extClient, chopClient := chop.GetClientset(kubeConfigFile, masterURL)
+	kubeClient, extClient, chopClient, dynamicClient := chop.GetClientset(kubeConfigFile, masterURL)
 
 	// Create operator instance
 	chop.New(kubeClient, chopClient, chopConfigFile)
 	log.V(1).F().Info("Config parsed:")
 	log.Info("\n" + chop.Config().String(true))
+	if chop.Config().RestartOnOperatorConfigurationChange() {
+		log.Info("Auto-restart on ClickHouseOperatorConfiguration change is enabled")
+	} else {
+		log.Info("Auto-restart on ClickHouseOperatorConfiguration change is disabled")
+	}
 
 	// Log namespace deny list configuration
 	if chop.Config().Watch.Namespaces.Exclude.Len() > 0 {
@@ -81,19 +86,30 @@ func initClickHouse(ctx context.Context) {
 		chopInformerFactoryResyncPeriod,
 		chopinformers.WithNamespace(chop.Config().GetInformerNamespace()),
 	)
+	chopConfigInformerFactory := chopinformers.NewSharedInformerFactoryWithOptions(
+		chopClient,
+		chopInformerFactoryResyncPeriod,
+		chopinformers.WithNamespace(chop.Config().Runtime.Namespace),
+	)
 
 	// Create Controller
 	chiController = chi.NewController(
 		chopClient,
 		extClient,
 		kubeClient,
+		dynamicClient,
+		chopConfigInformerFactory,
 		chopInformerFactory,
 		kubeInformerFactory,
 	)
 
+	// Start CHK watcher (if enabled by config)
+	chiController.StartCHKWatcher(ctx)
+
 	// Start Informers
 	kubeInformerFactory.Start(ctx.Done())
 	chopInformerFactory.Start(ctx.Done())
+	chopConfigInformerFactory.Start(ctx.Done())
 }
 
 // runClickHouse is an entry point of the application

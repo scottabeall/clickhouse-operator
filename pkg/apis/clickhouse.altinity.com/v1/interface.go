@@ -79,6 +79,8 @@ type IConfiguration interface {
 	GetQuotas() *Settings
 	GetSettings() *Settings
 	GetFiles() *Settings
+	GetZookeeper() *ZookeeperConfig
+	GetClusters() []*Cluster
 }
 
 type ICustomResourceRuntime interface {
@@ -306,4 +308,5 @@ type IActionPlan interface {
 		shardFunc func(shard IShard),
 		hostFunc func(host *Host),
 	)
+	DeepCopyIActionPlan() IActionPlan
 }

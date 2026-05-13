@@ -418,6 +418,14 @@ func (n *Normalizer) normalizeReconcileHost(rh chi.ReconcileHost) chi.ReconcileH
 	if rh.Wait.Probes == nil {
 		rh.Wait.Probes = &chi.ReconcileHostWaitProbes{}
 	}
+	// Wait between CHK hosts during reconcile until the new pod's startup probe passes.
+	// Without this, the operator may bump multiple replica StatefulSets back-to-back —
+	// all keeper pods can be down simultaneously, losing Raft quorum during the rollout
+	// window. Each replica is its own STS, so K8s STS RollingUpdate provides no
+	// cross-replica gate; the operator is the only place we can enforce sequencing.
+	if rh.Wait.Probes.Startup == nil {
+		rh.Wait.Probes.Startup = types.NewStringBool(true)
+	}
 	return rh
 }
 

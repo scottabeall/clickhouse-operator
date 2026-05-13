@@ -189,5 +189,30 @@ spec:
 ...
 ```
 
+### Keeper Coordination Settings
+
+The operator can be configured to control how it interacts with referenced ClickHouseKeeper (CHK) resources during reconciliation.
+
+```yaml
+spec:
+  reconcile:
+    coordination:
+      keeper:
+        # How long the operator waits for a referenced CHK to become ready
+        # before aborting CHI reconcile. In seconds. Default: 120.
+        readyTimeout: 120
+        # Reaction when a referenced CHK resource changes:
+        #   none (default) — do nothing
+        #   reconcile — trigger CHI reconcile when CHK completes
+        onKeeperResourceUpdate: none
+```
+
+| Setting | Default | Description |
+|---|---|---|
+| `readyTimeout` | `120` | Seconds to wait for CHK pods to become Running before aborting |
+| `onKeeperResourceUpdate` | `none` | `none` — ignore CHK changes; `reconcile` — auto-reconcile dependent CHIs when CHK completes |
+
+See [Keeper Reference](keeper_reference.md) for details on how CHI references CHK resources.
+
 [clickhouse-operator-install-bundle.yaml]: ../deploy/operator/clickhouse-operator-install-bundle.yaml
 [70-chop-config.yaml]: ./chi-examples/70-chop-config.yaml

@@ -15,6 +15,8 @@
 package creator
 
 import (
+	"fmt"
+
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -50,7 +52,7 @@ func (m *ProbeManager) createDefaultStartupProbe(_ *api.Host) *core.Probe {
 	return &core.Probe{
 		ProbeHandler: core.ProbeHandler{
 			Exec: &core.ExecAction{
-				Command: []string{"pgrep", "clickhouse-keeper"},
+				Command: []string{"pgrep", "-f", "clickhouse-keeper"},
 			},
 		},
 		InitialDelaySeconds: 1,
@@ -60,17 +62,34 @@ func (m *ProbeManager) createDefaultStartupProbe(_ *api.Host) *core.Probe {
 }
 
 // createDefaultLivenessProbe returns default liveness probe.
-// Uses pgrep to detect a crashed or hung clickhouse-keeper process.
+// Uses the ruok/imok 4LW handshake against the keeper's TCP client port to detect
+// not just process existence but actual responsiveness — a hung keeper (Raft thread
+// blocked, IO stalled) passes pgrep but fails ruok, which is the case liveness must
+// catch. ruok itself is quorum-independent (returns "imok" the moment the listener
+// is up, no Raft state check), so the probe will not cause cascading restarts during
+// leader election or cluster formation.
+//
+// Implemented via bash /dev/tcp redirection — the canonical repo idiom (see
+// deploy/clickhouse-keeper/clickhouse-keeper-manually/*.yaml). Avoids depending on
+// `nc` which is not always present in the keeper image. Requires bash; alpine-based
+// images that ship only BusyBox `ash` would need a fallback.
+//
 // Readiness (Raft quorum) is covered by the separate readiness probe.
-func (m *ProbeManager) createDefaultLivenessProbe(_ *api.Host) *core.Probe {
+func (m *ProbeManager) createDefaultLivenessProbe(host *api.Host) *core.Probe {
+	port := host.ZKPort.Normalize(api.KpDefaultZKPortNumber).Value()
+	cmd := fmt.Sprintf(
+		`OK=$(exec 3<>/dev/tcp/127.0.0.1/%d; printf "ruok" >&3; IFS=; tee <&3; exec 3<&-); [ "$OK" = "imok" ]`,
+		port,
+	)
 	return &core.Probe{
 		ProbeHandler: core.ProbeHandler{
 			Exec: &core.ExecAction{
-				Command: []string{"pgrep", "clickhouse-keeper"},
+				Command: []string{"bash", "-c", cmd},
 			},
 		},
 		InitialDelaySeconds: 5,
 		PeriodSeconds:       5,
+		TimeoutSeconds:      3,
 		FailureThreshold:    12,
 	}
 }

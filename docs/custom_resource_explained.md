@@ -61,6 +61,19 @@ clickhouse-installation-max   23h
 ```
 `.spec.configuration.zookeeper` refers to [&lt;yandex&gt;&lt;zookeeper&gt;&lt;/zookeeper&gt;&lt;/yandex&gt;][server-settings_zookeeper] config section
 
+Alternatively, instead of specifying `nodes` explicitly, you can reference a `ClickHouseKeeperInstallation` resource by name:
+```yaml
+    zookeeper:
+      keeper:
+        name: my-keeper           # name of the CHK resource
+        namespace: keeper-ns      # optional, defaults to CHI namespace
+        serviceType: replicas     # "replicas" (default) or "service"
+      session_timeout_ms: 30000
+      operation_timeout_ms: 10000
+```
+The operator resolves the keeper reference to ZooKeeper node addresses automatically, including TLS auto-detection.
+See [Keeper Reference](keeper_reference.md) for full details.
+
 ## .spec.configuration.profiles
 `.spec.configuration.profiles` refers to [&lt;yandex&gt;&lt;profiles&gt;&lt;/profiles&gt;&lt;/yandex&gt;][profiles] settings sections.
 ```yaml

@@ -1,6 +1,6 @@
 # altinity-clickhouse-operator
 
-![Version: 0.26.3](https://img.shields.io/badge/Version-0.26.3-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.26.3](https://img.shields.io/badge/AppVersion-0.26.3-informational?style=flat-square)
+![Version: 0.27.0](https://img.shields.io/badge/Version-0.27.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.27.0](https://img.shields.io/badge/AppVersion-0.27.0-informational?style=flat-square)
 
 Helm chart to deploy [altinity-clickhouse-operator](https://github.com/Altinity/clickhouse-operator).
 
@@ -76,6 +76,7 @@ crdHook:
 | configs | object | check the `values.yaml` file for the config content (auto-generated from latest operator release) | clickhouse operator configs |
 | crdHook.affinity | object | `{}` | affinity for CRD installation job |
 | crdHook.annotations | object | `{}` | additional annotations for CRD installation job |
+| crdHook.containerSecurityContext | object | `{}` | container security context for CRD installation job check `kubectl explain pod.spec.containers.securityContext` for details |
 | crdHook.enabled | bool | `true` | enable automatic CRD installation/update via pre-install/pre-upgrade hooks when disabled, CRDs must be installed manually using kubectl apply |
 | crdHook.image.pullPolicy | string | `"IfNotPresent"` | image pull policy for CRD installation job |
 | crdHook.image.repository | string | `"bitnami/kubectl"` | image repository for CRD installation job |
@@ -98,6 +99,8 @@ crdHook:
 | metrics.image.registry | string | `""` | optional image registry prefix (e.g. 1234567890.dkr.ecr.us-east-1.amazonaws.com) |
 | metrics.image.repository | string | `"altinity/metrics-exporter"` | image repository |
 | metrics.image.tag | string | `""` | image tag (chart's appVersion value will be used if not set) |
+| metrics.livenessProbe | string | `nil` | optional liveness probe for the metrics-exporter container check `kubectl explain pod.spec.containers.livenessProbe` for details example:   httpGet:     path: /metrics     port: ch-metrics   initialDelaySeconds: 10   periodSeconds: 10 |
+| metrics.readinessProbe | string | `nil` | optional readiness probe for the metrics-exporter container check `kubectl explain pod.spec.containers.readinessProbe` for details example:   httpGet:     path: /metrics     port: ch-metrics   initialDelaySeconds: 5   periodSeconds: 5 |
 | metrics.resources | object | `{}` | custom resource configuration |
 | nameOverride | string | `""` | override name of the chart |
 | namespaceOverride | string | `""` |  |
@@ -108,7 +111,9 @@ crdHook:
 | operator.image.registry | string | `""` | optional image registry prefix (e.g. 1234567890.dkr.ecr.us-east-1.amazonaws.com) |
 | operator.image.repository | string | `"altinity/clickhouse-operator"` | image repository |
 | operator.image.tag | string | `""` | image tag (chart's appVersion value will be used if not set) |
+| operator.livenessProbe | string | `nil` | optional liveness probe for the clickhouse-operator container check `kubectl explain pod.spec.containers.livenessProbe` for details example:   httpGet:     path: /metrics     port: op-metrics   initialDelaySeconds: 10   periodSeconds: 10 |
 | operator.priorityClassName | string | "" | priority class name for the clickhouse-operator deployment, check `kubectl explain pod.spec.priorityClassName` for details |
+| operator.readinessProbe | string | `nil` | optional readiness probe for the clickhouse-operator container check `kubectl explain pod.spec.containers.readinessProbe` for details example:   httpGet:     path: /metrics     port: op-metrics   initialDelaySeconds: 5   periodSeconds: 5 |
 | operator.resources | object | `{}` | custom resource configuration, check `kubectl explain pod.spec.containers.resources` for details |
 | podAnnotations | object | check the `values.yaml` file | annotations to add to the clickhouse-operator pod, check `kubectl explain pod.spec.annotations` for details |
 | podLabels | object | `{}` | labels to add to the clickhouse-operator pod |

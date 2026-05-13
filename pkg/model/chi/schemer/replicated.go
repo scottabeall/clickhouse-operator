@@ -66,21 +66,21 @@ func (s *ClusterSchemer) getReplicatedObjectsSQLs(ctx context.Context, host *api
 	databaseNames, createDatabaseSQLs := debugCreateSQLs(
 		s.QueryUnzip2Columns(
 			ctx,
-			s.Names(interfaces.NameFQDNs, host, api.ClickHouseInstallation{}, false),
+			s.Names(interfaces.NameFQDNs, host, api.Cluster{}, false),
 			s.sqlCreateDatabaseReplicated(host.Runtime.Address.ClusterName),
 		),
 	)
 	tableNames, createTableSQLs := debugCreateSQLs(
 		s.QueryUnzipAndApplyUUIDs(
 			ctx,
-			s.Names(interfaces.NameFQDNs, host, api.ClickHouseInstallation{}, false),
+			s.Names(interfaces.NameFQDNs, host, api.Cluster{}, false),
 			s.sqlCreateTableReplicated(host.Runtime.Address.ClusterName),
 		),
 	)
 	functionNames, createFunctionSQLs := debugCreateSQLs(
 		s.QueryUnzip2Columns(
 			ctx,
-			s.Names(interfaces.NameFQDNs, host, api.ClickHouseInstallation{}, false),
+			s.Names(interfaces.NameFQDNs, host, api.Cluster{}, false),
 			s.sqlCreateFunction(host.Runtime.Address.ClusterName),
 		),
 	)

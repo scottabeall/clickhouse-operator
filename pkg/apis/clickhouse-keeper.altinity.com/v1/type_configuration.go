@@ -63,6 +63,18 @@ func (c *Configuration) GetFiles() *apiChi.Settings {
 	return c.Files
 }
 
+// GetZookeeper is a no-op for CHK's Configuration — CHK doesn't reference zookeeper/keeper.
+// Satisfies apiChi.IConfiguration.
+func (c *Configuration) GetZookeeper() *apiChi.ZookeeperConfig {
+	return nil
+}
+
+// GetClusters is a no-op for CHK's Configuration — CHK clusters are not CHI clusters and
+// don't participate in CHI zookeeper resolution. Satisfies apiChi.IConfiguration.
+func (c *Configuration) GetClusters() []*apiChi.Cluster {
+	return nil
+}
+
 // MergeFrom merges from specified source
 func (c *Configuration) MergeFrom(from *Configuration, _type apiChi.MergeType) *Configuration {
 	if from == nil {
