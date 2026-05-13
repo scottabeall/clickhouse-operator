@@ -1,0 +1,11 @@
+additionalResources:
+  - |
+    apiVersion: clickhouse.altinity.com/v1
+    kind: ClickHouseInstallation
+    metadata:
+      name: simple-01
+      namespace: test-db
+    spec:
+      configuration:
+        clusters:
+          - name: simple
