@@ -1,0 +1,119 @@
+# Default values for clickhouse-installation.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Cluster Layout
+layout:
+  shardsCount: 1
+  replicasCount: 2
+
+# ClickHouse Image
+image:
+  repository: clickhouse/clickhouse-server
+  tag: "24.8"
+  pullPolicy: IfNotPresent
+
+# Storage Configuration
+storage:
+  data:
+    size: 10Gi
+    storageClassName: hostpath # Change to your storage class
+    accessModes:
+      - ReadWriteOnce
+  log:
+    enabled: false
+    size: 2Gi
+    storageClassName: standard
+    accessModes:
+      - ReadWriteOnce
+
+# Zookeeper Configuration (Required for replication/sharding)
+zookeeper:
+  enabled: true
+  nodes:
+     - host: zookeeper.default.svc.cluster.local
+       port: 2181
+
+# ClickHouse Settings (config.xml)
+settings: 
+  compression/case/method: zstd
+
+# ClickHouse Users (users.xml)
+adminPassword: "" # Leave empty to generate a random one
+users:
+  default:
+    password: "password"
+    networks/ip: "0.0.0.0/0"
+  admin:
+    profile: default
+
+# Profiles and Quotas
+profiles: {}
+  # default/max_memory_usage: 1000000000
+
+quotas: {}
+
+# Resource Limits/Requests
+resources: {}
+  # limits:
+  #   cpu: 1000m
+  #   memory: 2Gi
+  # requests:
+  #   cpu: 500m
+  #   memory: 1Gi
+
+# Monitoring
+# Enables prometheus monitoring endpoint in ClickHouse
+monitoring:
+  enabled: false
+  # Whether to create a ServiceMonitor for the Prometheus Operator
+  serviceMonitor: false
+  # Prometheus endpoint configuration
+  prometheus:
+    enabled: false
+    port: 9363
+
+# Custom Configuration Files
+files: {}
+  # dict1.xml: |
+  #   <yandex>
+  #       <!-- dictionary config -->
+  #   </yandex>
+
+# Tabix UI
+# A standalone UI to manage ClickHouse
+tabix-ui:
+  enabled: true
+
+# Advanced: Pod Template Extra Configuration
+podTemplate:
+  # extraEnv:
+  #   - name: SOME_VAR
+  #     value: "some_value"
+  extraVolumeMounts:
+    - name: data-volumeclaim-template
+      mountPath: /var/lib/clickhouse
+  # extraVolumes: []
+  sidecars:
+    - name: clickhouse-data-checker
+      image: busybox:1.35
+      imagePullPolicy: IfNotPresent
+      command:
+        - sh
+        - -c
+        - |
+          while true; do
+            du -sh /var/lib/clickhouse || true
+            sleep 60
+          done
+      volumeMounts:
+        - name: data-volumeclaim-template
+          mountPath: /var/lib/clickhouse
+          readOnly: true
+  # sidecars: []
+
+# Advanced: Service Template
+serviceTemplate:
+  type: ClusterIP
+  # annotations: {}

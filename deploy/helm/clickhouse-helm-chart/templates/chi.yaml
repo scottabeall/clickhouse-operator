@@ -1,0 +1,131 @@
+{{- $podTemplate := default (dict) .Values.podTemplate -}}
+apiVersion: "clickhouse.altinity.com/v1"
+kind: "ClickHouseInstallation"
+metadata:
+  name: {{ include "clickhouse.fullname" . }}
+  labels:
+    {{- include "clickhouse.labels" . | nindent 4 }}
+spec:
+  defaults:
+    templates:
+      dataVolumeClaimTemplate: data-volumeclaim-template
+      {{- if .Values.storage.log.enabled }}
+      logVolumeClaimTemplate: log-volumeclaim-template
+      {{- end }}
+      podTemplate: main-pod-template
+      {{- if .Values.serviceTemplate }}
+      serviceTemplate: main-service-template
+      {{- end }}
+
+  configuration:
+    {{- if .Values.zookeeper.enabled }}
+    zookeeper:
+      nodes:
+        {{- toYaml .Values.zookeeper.nodes | nindent 8 }}
+    {{- end }}
+    
+    users:
+      {{- range $user, $config := .Values.users }}
+      {{- if and (eq $user "admin") (not $config.k8s_secret_password) }}
+      {{ $user }}/k8s_secret_password: {{ printf "%s-admin/admin" (include "clickhouse.fullname" $) | quote }}
+      {{- end }}
+      {{- range $key, $val := $config }}
+      {{- if kindIs "map" $val }}
+      {{- range $k2, $v2 := $val }}
+      {{ $user }}/{{ $key }}/{{ $k2 }}: {{ $v2 | quote }}
+      {{- end }}
+      {{- else }}
+      {{ $user }}/{{ $key }}: {{ $val | quote }}
+      {{- end }}
+      {{- end }}
+      {{- end }}
+
+    profiles:
+      {{- toYaml .Values.profiles | nindent 6 }}
+
+    quotas:
+      {{- toYaml .Values.quotas | nindent 6 }}
+
+    settings:
+      {{- toYaml .Values.settings | nindent 6 }}
+
+    files:
+      {{- toYaml .Values.files | nindent 6 }}
+
+    clusters:
+      - name: "main"
+        layout:
+          shardsCount: {{ .Values.layout.shardsCount }}
+          replicasCount: {{ .Values.layout.replicasCount }}
+
+  {{- if and .Values.monitoring .Values.monitoring.enabled }}
+  # Enables prometheus monitoring endpoint
+  monitoring:
+    prometheus:
+      enabled: {{ default true .Values.monitoring.prometheus.enabled }}
+      {{- if .Values.monitoring.serviceMonitor }}
+      serviceMonitor: true
+      {{- end }}
+      port: {{ default 9363 .Values.monitoring.prometheus.port }}
+  {{- end }}
+
+  templates:
+    podTemplates:
+      - name: main-pod-template
+        spec:
+          containers:
+            - name: clickhouse
+              image: {{ printf "%s:%s" .Values.image.repository (default .Chart.AppVersion .Values.image.tag) }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              {{- if .Values.resources }}
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              {{- end }}
+              {{- if or $podTemplate.extraEnv $podTemplate.extraVolumeMounts }}
+              {{- if $podTemplate.extraEnv }}
+              env:
+                {{- toYaml $podTemplate.extraEnv | nindent 16 }}
+              {{- end }}
+              {{- if $podTemplate.extraVolumeMounts }}
+              volumeMounts:
+                {{- toYaml $podTemplate.extraVolumeMounts | nindent 16 }}
+              {{- end }}
+              {{- end }}
+          {{- if $podTemplate.sidecars }}
+          {{- toYaml $podTemplate.sidecars | nindent 12 }}
+          {{- end }}
+          {{- if $podTemplate.extraVolumes }}
+          volumes:
+            {{- toYaml $podTemplate.extraVolumes | nindent 12 }}
+          {{- end }}
+
+    volumeClaimTemplates:
+      - name: data-volumeclaim-template
+        spec:
+          {{- if .Values.storage.data.storageClassName }}
+          storageClassName: {{ .Values.storage.data.storageClassName }}
+          {{- end }}
+          accessModes:
+            {{- toYaml .Values.storage.data.accessModes | nindent 12 }}
+          resources:
+            requests:
+              storage: {{ .Values.storage.data.size }}
+      {{- if .Values.storage.log.enabled }}
+      - name: log-volumeclaim-template
+        spec:
+          {{- if .Values.storage.log.storageClassName }}
+          storageClassName: {{ .Values.storage.log.storageClassName }}
+          {{- end }}
+          accessModes:
+            {{- toYaml .Values.storage.log.accessModes | nindent 12 }}
+          resources:
+            requests:
+              storage: {{ .Values.storage.log.size }}
+      {{- end }}
+
+    {{- if .Values.serviceTemplate }}
+    serviceTemplates:
+      - name: main-service-template
+        spec:
+          {{- toYaml .Values.serviceTemplate | nindent 10 }}
+    {{- end }}

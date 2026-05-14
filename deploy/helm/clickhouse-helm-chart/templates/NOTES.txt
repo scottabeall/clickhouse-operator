@@ -1,0 +1,14 @@
+1. Get the ClickHouse Admin Password:
+   echo "Admin Password: $(kubectl get secret {{ include "clickhouse.fullname" . }}-admin -n {{ .Release.Namespace }} -o jsonpath='{.data.admin}' | base64 --decode)"
+
+2. Check the status of your ClickHouse Installation:
+   kubectl get chi {{ include "clickhouse.fullname" . }} -n {{ .Release.Namespace }}
+
+3. Monitor the Pods:
+   kubectl get pods -n {{ .Release.Namespace }} -l clickhouse.altinity.com/chi={{ include "clickhouse.fullname" . }}
+
+4. View ClickHouse Logs:
+   kubectl logs -n {{ .Release.Namespace }} chi-{{ include "clickhouse.fullname" . }}-main-0-0-0 -c clickhouse
+
+5. Secret Name for Reference:
+   {{ include "clickhouse.fullname" . }}-admin

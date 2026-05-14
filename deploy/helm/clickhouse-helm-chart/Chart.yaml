@@ -1,0 +1,11 @@
+apiVersion: v2
+name: clickhouse-installation
+description: A Helm chart for Altinity ClickHouse Operator ClickHouseInstallation
+type: application
+version: 0.1.0
+appVersion: "24.8"
+
+dependencies:
+  - name: tabix-ui
+    version: 0.1.0
+    condition: tabix-ui.enabled
